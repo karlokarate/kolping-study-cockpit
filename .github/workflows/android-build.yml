@@ -12,7 +12,7 @@ on:
           - debug
           - release
       version_name:
-        description: 'Version Name (optional, z.B. 1.0.1)'
+        description: 'Version Name (optional, e.g. 1.0.1)'
         required: false
         type: string
 
