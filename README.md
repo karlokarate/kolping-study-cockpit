@@ -1,5 +1,9 @@
 # Kolping Study Cockpit
 
+**Lokaler, sicherer Connector für Studiumsdaten der Kolping-Hochschule**
+
+> 📱 **NEU**: Kotlin Multiplatform Android App verfügbar! Siehe [`kmp/`](./kmp/) Verzeichnis.
+
 A secure local connector for study data management using Playwright browser automation and system keyring for credential management.
 
 ## Goal
@@ -11,7 +15,24 @@ Kolping Study Cockpit provides a secure, automated way to export study-related d
 
 ## Architecture
 
-### Core Components
+### Projects
+
+This repository contains two implementations:
+
+1. **Python CLI Tool** (`src/` directory) - Desktop automation tool
+   - Uses Playwright for browser automation
+   - Command-line interface with Typer
+   - Secure credential storage with Keyring
+   - JSON export functionality
+
+2. **📱 Kotlin Multiplatform Android App** ([`kmp/` directory](./kmp/)) - Native mobile app
+   - Ports Python business logic to Kotlin
+   - Native Android UI with Jetpack Compose
+   - WebView-based Microsoft Entra authentication
+   - Material Design 3 interface
+   - See [kmp/README.md](./kmp/README.md) for details
+
+### Core Components (Python CLI)
 
 ```
 kolping-cockpit/
