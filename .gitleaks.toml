@@ -1,0 +1,36 @@
+# Gitleaks configuration file
+# See https://github.com/gitleaks/gitleaks#configuration
+
+title = "Gitleaks Configuration for Kolping Study Cockpit"
+
+[extend]
+# Extend the default gitleaks configuration
+useDefault = true
+
+[allowlist]
+description = "Allowlist for known safe patterns"
+paths = [
+    # Test files can have mock credentials
+    '''tests/.*''',
+    # Documentation examples
+    '''docs/.*''',
+]
+
+regexes = [
+    # Allow example credentials in documentation
+    '''testuser''',
+    '''testpass''',
+    '''example\.com''',
+]
+
+[[rules]]
+id = "playwright-auth"
+description = "Playwright authentication files"
+regex = '''playwright/.auth/'''
+path = '''\.gitignore'''
+
+[[rules]]
+id = "environment-files"
+description = "Environment variable files"
+regex = '''\.env'''
+path = '''\.gitignore'''
