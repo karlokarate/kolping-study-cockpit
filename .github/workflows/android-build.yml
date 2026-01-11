@@ -97,14 +97,8 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: >-
-            kolping-cockpit-${{
-              steps.build-config.outputs.build_type
-            }}-apk
-          path: >-
-            kmp/androidApp/build/outputs/apk/${{
-              steps.build-config.outputs.build_type
-            }}/*.apk
+          name: kolping-cockpit-${{ steps.build-config.outputs.build_type }}-apk
+          path: kmp/androidApp/build/outputs/apk/${{ steps.build-config.outputs.build_type }}/*.apk
           retention-days: 30
 
       - name: Upload Build Reports
