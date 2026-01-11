@@ -1596,6 +1596,389 @@ def get_graphql_token_auto(
             browser.close()
 
 
+@app.command("exams")
+def show_comprehensive_exams(
+    semester: int = typer.Option(
+        None, "--semester", "-s", help="Filter by specific semester number (default: current semester)"
+    ),
+    include_completed: bool = typer.Option(
+        False, "--completed", "-c", help="Include completed modules"
+    ),
+    analyze_endpoints: bool = typer.Option(
+        False, "--analyze", "-a", help="First analyze all available GraphQL endpoints"
+    ),
+) -> None:
+    """
+    Comprehensive exam dates and requirements overview.
+
+    Fetches and displays:
+    - All exam dates for registered modules this semester
+    - Required assessment types for each module (Klausur, Lerntagebuch, etc.)
+    - Links to Moodle courses and materials
+    - Upcoming deadlines from Moodle calendar
+    - What you need to do for each module
+
+    If --analyze is set, first analyzes all available GraphQL endpoints.
+
+    Example:
+        kolping exams
+        kolping exams --semester 3
+        kolping exams --analyze
+    """
+    from rich.panel import Panel
+
+    console.print("[bold cyan]📚 Kolping Study Cockpit - Prüfungstermine & Leistungsübersicht[/bold cyan]")
+    console.print("=" * 70)
+
+    # Step 1: Analyze endpoints if requested
+    if analyze_endpoints:
+        console.print("\n[bold yellow]🔍 SCHRITT 1: Analyse aller verfügbaren Endpunkte[/bold yellow]")
+        console.print("[dim]Teste alle bekannten GraphQL Queries...[/dim]\n")
+
+        try:
+            from kolping_cockpit.graphql_client import KolpingGraphQLClient
+
+            with KolpingGraphQLClient() as client:
+                if not client.is_authenticated:
+                    console.print("[red]✗ Kein Bearer Token konfiguriert[/red]")
+                    console.print("[dim]  Setze Token mit: kolping set-graphql[/dim]")
+                else:
+                    # Test each available query
+                    test_queries = [
+                        "myStudentData",
+                        "myStudentGradeOverview",
+                        "moduls",
+                        "semesters",
+                        "pruefungs",
+                        "studiengangs",
+                        "matchModulStudent",
+                    ]
+
+                    table = Table(title="GraphQL Endpoint Analyse")
+                    table.add_column("Query", style="cyan")
+                    table.add_column("Status", style="magenta")
+                    table.add_column("Ergebnis")
+
+                    for query_name in test_queries:
+                        try:
+                            response = client.execute_named_query(query_name, simple=True)
+                            if response.has_errors:
+                                status = "[yellow]⚠[/yellow]"
+                                result = f"Fehler: {response.errors[0].message if response.errors else 'Unknown'}"
+                            elif response.data:
+                                # Count results
+                                data_key = list(response.data.keys())[0] if response.data else None
+                                if data_key:
+                                    data_val = response.data[data_key]
+                                    if isinstance(data_val, list):
+                                        result = f"{len(data_val)} Einträge"
+                                    elif isinstance(data_val, dict):
+                                        result = f"{len(data_val)} Felder"
+                                    else:
+                                        result = "Daten vorhanden"
+                                    status = "[green]✓[/green]"
+                                else:
+                                    status = "[yellow]○[/yellow]"
+                                    result = "Keine Daten"
+                            else:
+                                status = "[yellow]○[/yellow]"
+                                result = "Leer"
+                            table.add_row(query_name, status, result)
+                        except Exception as e:
+                            table.add_row(query_name, "[red]✗[/red]", str(e)[:50])
+
+                    console.print(table)
+                    console.print()
+        except Exception as e:
+            console.print(f"[red]✗ Analyse fehlgeschlagen: {e}[/red]\n")
+
+    # Step 2: Fetch comprehensive exam data
+    console.print("[bold yellow]🎓 SCHRITT 2: Lade Prüfungsdaten und Modulübersicht[/bold yellow]\n")
+
+    grade_data = None
+    exam_dates = []
+    all_modules = []
+    enrolled_modules = []
+    calendar_events = []
+    moodle_courses = []
+    errors = []
+
+    # Fetch from GraphQL
+    console.print("[dim]Lade GraphQL Daten...[/dim]")
+    try:
+        from kolping_cockpit.graphql_client import KolpingGraphQLClient
+
+        with KolpingGraphQLClient() as client:
+            if not client.is_authenticated:
+                errors.append("GraphQL: Kein Bearer Token konfiguriert")
+            else:
+                success, _ = client.test_connection()
+                if not success:
+                    errors.append("GraphQL: Verbindung fehlgeschlagen")
+                else:
+                    # Get grade overview (includes all modules with status)
+                    response = client.execute_named_query("myStudentGradeOverview")
+                    if response.data and "myStudentGradeOverview" in response.data:
+                        grade_data = response.data["myStudentGradeOverview"]
+                        console.print("[green]✓ Prüfungsübersicht geladen[/green]")
+
+                    # Get exam dates
+                    response = client.execute_named_query("pruefungs", simple=True)
+                    if response.data and "pruefungs" in response.data:
+                        exam_dates = response.data["pruefungs"]
+                        console.print(f"[green]✓ {len(exam_dates)} Prüfungstermine gefunden[/green]")
+
+                    # Get all modules
+                    response = client.execute_named_query("moduls", simple=True)
+                    if response.data and "moduls" in response.data:
+                        all_modules = response.data["moduls"]
+                        console.print(f"[green]✓ {len(all_modules)} Module geladen[/green]")
+
+                    # Get enrolled modules
+                    response = client.execute_named_query("matchModulStudent", simple=True)
+                    if response.data and "matchModulStudent" in response.data:
+                        enrolled_modules = response.data["matchModulStudent"]
+                        console.print(f"[green]✓ {len(enrolled_modules)} Einschreibungen gefunden[/green]")
+    except Exception as e:
+        errors.append(f"GraphQL: {e}")
+        console.print(f"[red]✗ GraphQL Fehler: {e}[/red]")
+
+    # Fetch from Moodle
+    console.print("[dim]Lade Moodle Daten...[/dim]")
+    try:
+        from kolping_cockpit.moodle_client import KolpingMoodleClient
+
+        with KolpingMoodleClient() as client:
+            if not client.is_authenticated:
+                errors.append("Moodle: Keine Session konfiguriert")
+            else:
+                is_valid, _ = client.test_session()
+                if not is_valid:
+                    errors.append("Moodle: Session abgelaufen")
+                else:
+                    # Get calendar events
+                    calendar_events = client.get_upcoming_deadlines()
+                    console.print(f"[green]✓ {len(calendar_events)} Kalender-Events geladen[/green]")
+
+                    # Get courses
+                    moodle_courses = client.get_courses()
+                    console.print(f"[green]✓ {len(moodle_courses)} Kurse geladen[/green]")
+    except Exception as e:
+        errors.append(f"Moodle: {e}")
+        console.print(f"[red]✗ Moodle Fehler: {e}[/red]")
+
+    if errors:
+        console.print("\n[yellow]⚠ Einige Datenquellen nicht verfügbar:[/yellow]")
+        for err in errors:
+            console.print(f"  [dim]{err}[/dim]")
+
+    console.print()
+
+    # Step 3: Display comprehensive overview
+    if grade_data:
+        current_sem = grade_data.get("currentSemester", "Unbekannt")
+        current_sem_num = int(current_sem.split()[0]) if current_sem and current_sem[0].isdigit() else None
+
+        console.print(f"[bold]📊 Aktuelles Semester:[/bold] {current_sem}")
+        console.print(f"[bold]Notendurchschnitt:[/bold] {grade_data.get('grade', '-')}")
+        console.print(f"[bold]Erreichte ECTS:[/bold] {grade_data.get('eCTS', 0)}")
+
+        modules = grade_data.get("modules", [])
+
+        # Filter by semester if specified
+        if semester:
+            modules = [m for m in modules if m.get("semester") == semester]
+            display_semester = semester
+        elif current_sem_num:
+            display_semester = current_sem_num
+        else:
+            display_semester = None
+
+        # Categorize modules
+        angemeldet = [m for m in modules if m.get("examStatus") == "angemeldet"]
+        offen = [
+            m for m in modules
+            if m.get("examStatus") is None and m.get("pruefungsform") != "Anerkennung"
+        ]
+
+        # Filter open modules to current semester range if not explicitly set
+        if not semester and display_semester:
+            offen = [m for m in offen if m.get("semester", 0) <= display_semester]
+
+        # Show registered exams with dates
+        if angemeldet:
+            console.print("\n")
+            table = Table(
+                title="🔴 ANGEMELDETE PRÜFUNGEN MIT TERMINEN",
+                title_style="bold red",
+                border_style="red",
+            )
+            table.add_column("Modul", style="bold", max_width=40)
+            table.add_column("Sem.", justify="center", width=5)
+            table.add_column("Prüfungsform", style="cyan", max_width=15)
+            table.add_column("ECTS", justify="right", width=5)
+            table.add_column("Termin", style="yellow", max_width=25)
+
+            for m in sorted(angemeldet, key=lambda x: x.get("semester", 99)):
+                modul_id = m.get("modulId")
+                modul_name = m.get("modulbezeichnung", "?")[:40]
+
+                # Find exam date for this module
+                exam_date = "Siehe Kalender"
+                if modul_id and exam_dates:
+                    matching_exam = next((e for e in exam_dates if str(e.get("modulId")) == str(modul_id)), None)
+                    if matching_exam:
+                        datum = matching_exam.get("datum", "")
+                        uhrzeit = matching_exam.get("uhrzeit", "")
+                        raum = matching_exam.get("raum", "")
+                        if datum:
+                            exam_date = f"{datum}"
+                            if uhrzeit:
+                                exam_date += f" {uhrzeit}"
+                            if raum:
+                                exam_date += f" ({raum})"
+
+                table.add_row(
+                    modul_name,
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?")[:15],
+                    str(m.get("eCTS", 0)),
+                    exam_date[:25],
+                )
+            console.print(table)
+
+            # Show what's needed for each exam
+            console.print("\n[bold]📋 Was du für die angemeldeten Prüfungen brauchst:[/bold]\n")
+            for m in angemeldet:
+                pruefungsform = m.get("pruefungsform", "Unbekannt")
+                modul_name = m.get("modulbezeichnung", "Unbekannt")
+
+                requirements = _get_requirements_for_pruefungsform(pruefungsform)
+
+                console.print(Panel(
+                    f"[bold]{modul_name}[/bold]\n"
+                    f"[cyan]Prüfungsform:[/cyan] {pruefungsform}\n"
+                    f"[yellow]Erforderlich:[/yellow]\n{requirements}",
+                    border_style="blue"
+                ))
+
+        # Show open modules with requirements
+        if offen:
+            console.print("\n")
+            table = Table(
+                title=f"📝 OFFENE MODULE{f' (Semester {display_semester})' if display_semester else ''}",
+                title_style="bold",
+            )
+            table.add_column("Modul", style="bold", max_width=40)
+            table.add_column("Sem.", justify="center", width=5)
+            table.add_column("Prüfungsform", style="cyan", max_width=20)
+            table.add_column("ECTS", justify="right", width=5)
+            table.add_column("Moodle Kurs", style="dim", max_width=15)
+
+            for m in sorted(offen, key=lambda x: x.get("semester", 99)):
+                modul_name = m.get("modulbezeichnung", "?")
+
+                # Try to find matching Moodle course
+                moodle_link = "–"
+                if moodle_courses:
+                    # Simple fuzzy match on course name
+                    matching_course = next(
+                        (c for c in moodle_courses if modul_name[:20].lower() in c.name.lower()),
+                        None
+                    )
+                    if matching_course:
+                        moodle_link = "✓ Verfügbar"
+
+                table.add_row(
+                    modul_name[:40],
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?")[:20],
+                    str(m.get("eCTS", 0)),
+                    moodle_link[:15],
+                )
+            console.print(table)
+
+            # Group by assessment type
+            console.print("\n[bold]📚 Offene Module nach Prüfungsform gruppiert:[/bold]\n")
+
+            pruefungsformen: dict[str, list] = {}
+            for m in offen:
+                pform = m.get("pruefungsform", "Unbekannt")
+                if pform not in pruefungsformen:
+                    pruefungsformen[pform] = []
+                pruefungsformen[pform].append(m)
+
+            for pform, modules_list in sorted(pruefungsformen.items()):
+                count = len(modules_list)
+                ects_sum = sum(m.get("eCTS", 0) for m in modules_list)
+                requirements = _get_requirements_for_pruefungsform(pform)
+
+                console.print(f"[bold cyan]{pform}[/bold cyan] ({count} Module, {ects_sum} ECTS)")
+                console.print(f"[dim]{requirements}[/dim]")
+                for mod in modules_list:
+                    console.print(f"  • {mod.get('modulbezeichnung', '?')[:50]} (Sem. {mod.get('semester', '?')})")
+                console.print()
+
+    # Show calendar events with course links
+    if calendar_events:
+        console.print("\n")
+        table = Table(title="📅 KOMMENDE TERMINE & DEADLINES (Moodle)")
+        table.add_column("Event", style="bold", max_width=45)
+        table.add_column("Datum/Zeit", style="cyan", max_width=25)
+        table.add_column("Link", style="dim", max_width=10)
+
+        for event in calendar_events[:15]:
+            has_link = "✓" if event.url else "–"
+            table.add_row(
+                (event.title or "?")[:45],
+                event.start_time or "?",
+                has_link,
+            )
+        console.print(table)
+
+    # Show Moodle courses with links
+    if moodle_courses and len(moodle_courses) > 0:
+        console.print("\n")
+        table = Table(title="🔗 MOODLE KURSE & MATERIALIEN")
+        table.add_column("Kurs", style="bold", max_width=50)
+        table.add_column("Link", style="cyan", max_width=30)
+
+        for course in moodle_courses[:20]:
+            short_url = course.url[:30] + "..." if course.url and len(course.url) > 30 else (course.url or "")
+            table.add_row(
+                course.name[:50],
+                short_url,
+            )
+        if len(moodle_courses) > 20:
+            console.print(f"[dim]... und {len(moodle_courses) - 20} weitere Kurse[/dim]")
+        console.print(table)
+
+    # Final tips
+    console.print("\n[bold cyan]💡 Nützliche Links:[/bold cyan]")
+    console.print("  • Moodle Portal: https://portal.kolping-hochschule.de")
+    console.print("  • Mein Studium: https://cms.kolping-hochschule.de")
+    console.print("  • Kalender: https://portal.kolping-hochschule.de/calendar/view.php")
+    console.print("\n[dim]Tipp: Verwende 'kolping export all' für vollständigen JSON-Export[/dim]")
+
+
+def _get_requirements_for_pruefungsform(pruefungsform: str) -> str:
+    """Get description of requirements for a given assessment type."""
+    requirements_map = {
+        "Klausur": "  • Schriftliche Prüfung im Prüfungszeitraum\n  • Anmeldung erforderlich\n  • Prüfungsvorbereitung empfohlen",
+        "Lerntagebuch": "  • Regelmäßige Reflexion über Lernprozess\n  • Dokumentation in vorgegebenem Format\n  • Abgabe über Moodle",
+        "Präsentation": "  • Vorbereitung einer Präsentation (10-20 Min.)\n  • Handout oder Folien\n  • Präsentation vor Kurs/Dozent",
+        "Seminararbeit": "  • Schriftliche Ausarbeitung (10-15 Seiten)\n  • Wissenschaftliche Zitierweise\n  • Abgabe als PDF über Moodle",
+        "E-Portfolio ": "  • Digitale Sammlung von Lernartefakten\n  • Reflexion über Lernfortschritt\n  • Online-Präsentation",
+        "Mündliche Prüfung": "  • Terminvereinbarung mit Prüfer\n  • Vorbereitung auf Prüfungsgespräch\n  • Ca. 20-30 Minuten",
+        "Anerkennung": "  • Nachweis über Praxisphase\n  • Bestätigung vom Arbeitgeber\n  • Einreichung über Studierendensekretariat",
+        "Exposé": "  • Forschungsplan für Abschlussarbeit\n  • 3-5 Seiten\n  • Einreichung beim Betreuer",
+        "Bachelorthesis & Kolloquium": "  • Wissenschaftliche Arbeit (40-60 Seiten)\n  • Kolloquium (30 Min. Verteidigung)\n  • Anmeldung und Themenfindung",
+        "Praxistransferbericht": "  • Bericht über Praxisphase (10-15 Seiten)\n  • Reflexion der praktischen Tätigkeit\n  • Abgabe über Moodle",
+    }
+
+    return requirements_map.get(pruefungsform, "  • Details siehe Modulhandbuch\n  • Informationen auf Moodle")
+
+
 @app.command("extract-token")
 def extract_token_from_captures() -> None:
     """
