@@ -89,23 +89,69 @@ You'll be prompted to enter your username and password. These are stored securel
 
 ### Usage
 
-Export data to JSON:
+#### Exam Dates and Requirements Overview
+
+View comprehensive exam dates, assessment requirements, and module information:
 
 ```bash
-# Export with default settings
-kolping export
+# Show all exam dates and requirements
+kolping exams
 
-# Export to a specific file
-kolping export --output my-data.json
+# Filter by specific semester
+kolping exams --semester 3
 
-# Run with visible browser (for debugging)
-kolping export --headed
+# Include endpoint analysis
+kolping exams --analyze
 ```
+
+This command provides:
+- All exam dates for registered modules with time and location
+- Required assessment types for each module (Klausur, Lerntagebuch, Präsentation, etc.)
+- Detailed requirements for each assessment type
+- Links to Moodle courses and materials
+- Upcoming calendar events and deadlines
+- Integration of GraphQL and Moodle data
+
+#### Export Data to JSON
+
+```bash
+# Export GraphQL data
+kolping export graphql
+
+# Export Moodle data
+kolping export moodle
+
+# Export all data
+kolping export all
+
+# Export to a specific directory
+kolping export all --output-dir ./my-exports
+```
+
+#### Other Commands
 
 Show version:
 
 ```bash
 kolping version
+```
+
+Show authentication status:
+
+```bash
+kolping status
+```
+
+Configure credentials:
+
+```bash
+kolping configure
+```
+
+Show upcoming deadlines:
+
+```bash
+kolping deadlines
 ```
 
 ### Development
