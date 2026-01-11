@@ -216,3 +216,8 @@ cookies*
 
 # Export data
 exports/
+
+# Local secrets storage (for Codespaces without keyring)
+.kolping-cockpit/
+~/.kolping-cockpit/
+.secrets.json

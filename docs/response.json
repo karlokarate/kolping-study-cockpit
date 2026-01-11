@@ -1,0 +1,24 @@
+{
+  "app": "com.android.chrome",
+  "code": 200,
+  "duration": "37ms",
+  "headers": {
+    "Date": "Sun, 11 Jan 2026 12:11:22 GMT",
+    "Server": "Apache/2.4.58 (Ubuntu)",
+    "Expires": "Thu, 19 Nov 1981 08:52:00 GMT",
+    "Cache-Control": "no-store, no-cache, must-revalidate",
+    "Pragma": "no-cache",
+    "Vary": "Accept-Encoding",
+    "Content-Encoding": "gzip",
+    "Content-Length": "22",
+    "Keep-Alive": "timeout\u003d5, max\u003d88",
+    "Connection": "Keep-Alive",
+    "Content-Type": "text/html; charset\u003dutf-8"
+  },
+  "message": "OK",
+  "protocol": "HTTP/1.1",
+  "remoteIp": "20.52.45.91",
+  "remotePort": 443,
+  "sessionId": "19ff1dcd-dc72-4584-ac88-5abadc40a9ef",
+  "time": "2026-01-11 13:11:21"
+}

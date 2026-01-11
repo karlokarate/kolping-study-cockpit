@@ -27,7 +27,9 @@ class KolpingSettings(BaseSettings):
 
     # Authentication
     username: str | None = Field(default=None, description="Kolping-Hochschule login email")
-    password: str | None = Field(default=None, description="Kolping-Hochschule password (prefer keyring)")
+    password: str | None = Field(
+        default=None, description="Kolping-Hochschule password (prefer keyring)"
+    )
     client_id: str = Field(
         default="e27e57f4-abba-4475-b507-389e1e48e282",
         description="Microsoft Entra client ID",
@@ -137,18 +139,110 @@ def get_secret_from_env_or_keyring(key: str, service: str = "kolping-cockpit") -
     if env_value:
         return env_value
 
-    # Fall back to keyring
+    # Fall back to keyring or file storage
     try:
         import keyring
+        from keyring.backends.fail import Keyring as FailKeyring
 
-        return keyring.get_password(service, key)
+        # Check if keyring has a working backend
+        if not isinstance(keyring.get_keyring(), FailKeyring):
+            return keyring.get_password(service, key)
     except Exception:
-        return None
+        pass
+
+    # Fall back to file-based storage
+    return _get_secret_from_file(key)
+
+
+def _get_secrets_file() -> Path:
+    """Get path to local secrets file."""
+    # Try multiple locations
+    locations = [
+        Path.cwd() / ".secrets.json",  # Project directory first
+        Path.home() / ".kolping-cockpit" / "secrets.json",
+    ]
+    for loc in locations:
+        if loc.exists():
+            return loc
+    # Default to project directory for new files
+    return Path.cwd() / ".secrets.json"
+
+
+def _get_secret_from_file(key: str) -> str | None:
+    """Get a secret from the local secrets file."""
+    # Check both locations
+    locations = [
+        Path.cwd() / ".secrets.json",
+        Path.home() / ".kolping-cockpit" / "secrets.json",
+    ]
+    for secrets_file in locations:
+        if not secrets_file.exists():
+            continue
+        try:
+            import json
+
+            with secrets_file.open() as f:
+                secrets = json.load(f)
+            if key in secrets:
+                return secrets.get(key)
+        except Exception:
+            continue
+    return None
+
+
+def _store_secret_to_file(key: str, value: str) -> bool:
+    """Store a secret to the local secrets file."""
+    secrets_file = _get_secrets_file()
+    try:
+        import json
+
+        secrets_file.parent.mkdir(parents=True, exist_ok=True)
+        secrets_file.chmod(0o700) if secrets_file.parent.exists() else None
+
+        # Load existing secrets
+        secrets = {}
+        if secrets_file.exists():
+            with secrets_file.open() as f:
+                secrets = json.load(f)
+
+        # Update and save
+        secrets[key] = value
+        with secrets_file.open("w") as f:
+            json.dump(secrets, f, indent=2)
+
+        # Secure the file
+        secrets_file.chmod(0o600)
+        return True
+    except Exception:
+        return False
+
+
+def _delete_secret_from_file(key: str) -> bool:
+    """Delete a secret from the local secrets file."""
+    secrets_file = _get_secrets_file()
+    if not secrets_file.exists():
+        return False
+    try:
+        import json
+
+        with secrets_file.open() as f:
+            secrets = json.load(f)
+
+        if key in secrets:
+            del secrets[key]
+            with secrets_file.open("w") as f:
+                json.dump(secrets, f, indent=2)
+            return True
+        return False
+    except Exception:
+        return False
 
 
 def store_secret(key: str, value: str, service: str = "kolping-cockpit") -> bool:
     """
-    Store a secret in the system keyring.
+    Store a secret in the system keyring or local file.
+
+    Tries keyring first, falls back to encrypted local file for Codespaces.
 
     Args:
         key: The key name
@@ -158,18 +252,24 @@ def store_secret(key: str, value: str, service: str = "kolping-cockpit") -> bool
     Returns:
         True if successful, False otherwise
     """
+    # Try keyring first
     try:
         import keyring
+        from keyring.backends.fail import Keyring as FailKeyring
 
-        keyring.set_password(service, key, value)
-        return True
+        if not isinstance(keyring.get_keyring(), FailKeyring):
+            keyring.set_password(service, key, value)
+            return True
     except Exception:
-        return False
+        pass
+
+    # Fall back to file storage
+    return _store_secret_to_file(key, value)
 
 
 def delete_secret(key: str, service: str = "kolping-cockpit") -> bool:
     """
-    Delete a secret from the system keyring.
+    Delete a secret from the system keyring or local file.
 
     Args:
         key: The key name
@@ -178,10 +278,21 @@ def delete_secret(key: str, service: str = "kolping-cockpit") -> bool:
     Returns:
         True if successful, False otherwise
     """
+    deleted = False
+
+    # Try keyring
     try:
         import keyring
+        from keyring.backends.fail import Keyring as FailKeyring
 
-        keyring.delete_password(service, key)
-        return True
+        if not isinstance(keyring.get_keyring(), FailKeyring):
+            keyring.delete_password(service, key)
+            deleted = True
     except Exception:
-        return False
+        pass
+
+    # Also try file storage
+    if _delete_secret_from_file(key):
+        deleted = True
+
+    return deleted

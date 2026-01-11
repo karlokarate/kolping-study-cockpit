@@ -1,0 +1,27 @@
+{
+  "app": "com.android.chrome",
+  "duration": "49ms",
+  "headers": {
+    "Host": "portal.kolping-hochschule.de",
+    "Connection": "keep-alive",
+    "sec-ch-ua-platform": "\"Android\"",
+    "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36",
+    "sec-ch-ua": "\"Google Chrome\";v\u003d\"143\", \"Chromium\";v\u003d\"143\", \"Not A(Brand\";v\u003d\"24\"",
+    "sec-ch-ua-mobile": "?1",
+    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q\u003d0.8",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-Mode": "no-cors",
+    "Sec-Fetch-Dest": "image",
+    "Referer": "https://portal.kolping-hochschule.de/course/view.php?id\u003d390",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Language": "de-DE,de;q\u003d0.9,en-US;q\u003d0.8,en;q\u003d0.7,nl;q\u003d0.6",
+    "Cookie": "MoodleSession\u003dhc44qmok5dk0mrran7snq8qb1a"
+  },
+  "method": "GET",
+  "protocol": "HTTP/1.1",
+  "remoteIp": "20.52.45.91",
+  "remotePort": 443,
+  "sessionId": "2be2a21d-fd4e-4bfe-8e5d-082054f9b0b4",
+  "time": "2026-01-11 13:10:35",
+  "url": "https://portal.kolping-hochschule.de/theme/image.php/boost/forum/1759744203/icon"
+}
