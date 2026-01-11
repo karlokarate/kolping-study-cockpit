@@ -631,5 +631,1085 @@ def status() -> None:
             console.print(f"[red]✗ Moodle test failed: {e}[/red]")
 
 
+@app.command("deadlines")
+def show_deadlines(
+    include_past: bool = typer.Option(
+        False, "--include-past", "-p", help="Include past/completed modules"
+    ),
+    semester: int = typer.Option(
+        None, "--semester", "-s", help="Filter by specific semester number"
+    ),
+) -> None:
+    """
+    Show upcoming exams, assignments and deadlines.
+
+    Combines data from:
+    - GraphQL API (exam registrations, module status)
+    - Moodle Calendar (upcoming events, deadlines)
+
+    Example:
+        kolping deadlines
+        kolping deadlines --semester 3
+    """
+
+    from rich.panel import Panel
+
+    console.print("[bold cyan]📚 Kolping Study Cockpit - Prüfungen & Deadlines[/bold cyan]")
+    console.print("=" * 60)
+
+    # Data containers
+    grade_data = None
+    calendar_events = []
+    errors = []
+
+    # 1. Fetch GraphQL data (exam status)
+    console.print("\n[dim]Lade Prüfungsstatus...[/dim]")
+    try:
+        from kolping_cockpit.graphql_client import KolpingGraphQLClient
+
+        with KolpingGraphQLClient() as client:
+            if client.is_authenticated:
+                success, _ = client.test_connection()
+                if success:
+                    response = client.execute_named_query("myStudentGradeOverview")
+                    if response.data and "myStudentGradeOverview" in response.data:
+                        grade_data = response.data["myStudentGradeOverview"]
+                        console.print("[green]✓ Prüfungsdaten geladen[/green]")
+                else:
+                    errors.append("GraphQL: Verbindung fehlgeschlagen")
+            else:
+                errors.append("GraphQL: Kein Bearer Token konfiguriert")
+    except Exception as e:
+        errors.append(f"GraphQL: {e}")
+
+    # 2. Fetch Moodle calendar events
+    console.print("[dim]Lade Kalender-Events...[/dim]")
+    try:
+        from kolping_cockpit.moodle_client import KolpingMoodleClient
+
+        with KolpingMoodleClient() as client:
+            if client.is_authenticated:
+                is_valid, _ = client.test_session()
+                if is_valid:
+                    calendar_events = client.get_upcoming_deadlines()
+                    console.print(
+                        f"[green]✓ {len(calendar_events)} Kalender-Events geladen[/green]"
+                    )
+                else:
+                    errors.append("Moodle: Session abgelaufen")
+            else:
+                errors.append("Moodle: Keine Session konfiguriert")
+    except Exception as e:
+        errors.append(f"Moodle: {e}")
+
+    # Show errors if any
+    if errors:
+        console.print("\n[yellow]⚠ Einige Datenquellen nicht verfügbar:[/yellow]")
+        for err in errors:
+            console.print(f"  [dim]{err}[/dim]")
+
+    # 3. Display exam overview
+    if grade_data:
+        current_sem = grade_data.get("currentSemester", "Unbekannt")
+        total_grade = grade_data.get("grade", "-")
+        total_ects = grade_data.get("eCTS", 0)
+
+        console.print(f"\n[bold]Aktuelles Semester:[/bold] {current_sem}")
+        console.print(f"[bold]Notendurchschnitt:[/bold] {total_grade}")
+        console.print(f"[bold]Erreichte ECTS:[/bold] {total_ects}")
+
+        modules = grade_data.get("modules", [])
+
+        # Filter by semester if specified
+        if semester:
+            modules = [m for m in modules if m.get("semester") == semester]
+
+        # Categorize modules
+        angemeldet = [m for m in modules if m.get("examStatus") == "angemeldet"]
+        nicht_bestanden = [m for m in modules if m.get("examStatus") == "nicht bestanden"]
+        offen = [
+            m
+            for m in modules
+            if m.get("examStatus") is None and m.get("pruefungsform") != "Anerkennung"
+        ]
+        abgemeldet = [m for m in modules if m.get("examStatus") == "abgemeldet"]
+
+        # Show registered exams (urgent!)
+        if angemeldet:
+            console.print("\n")
+            table = Table(
+                title="🔴 ANGEMELDETE PRÜFUNGEN",
+                title_style="bold red",
+                border_style="red",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Prüfungsform", style="cyan")
+            table.add_column("ECTS", justify="right")
+
+            for m in angemeldet:
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:50],
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?"),
+                    str(m.get("eCTS", 0)),
+                )
+            console.print(table)
+
+        # Show failed exams (need retry)
+        if nicht_bestanden:
+            console.print("\n")
+            table = Table(
+                title="⚠️ NICHT BESTANDEN (Wiederholung nötig)",
+                title_style="bold yellow",
+                border_style="yellow",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Prüfungsform", style="cyan")
+            table.add_column("ECTS", justify="right")
+
+            for m in nicht_bestanden:
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:50],
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?"),
+                    str(m.get("eCTS", 0)),
+                )
+            console.print(table)
+
+        # Show deregistered exams
+        if abgemeldet:
+            console.print("\n")
+            table = Table(
+                title="📋 ABGEMELDET (neu anmelden)",
+                title_style="bold blue",
+                border_style="blue",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Prüfungsform", style="cyan")
+            table.add_column("ECTS", justify="right")
+
+            for m in abgemeldet:
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:50],
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?"),
+                    str(m.get("eCTS", 0)),
+                )
+            console.print(table)
+
+        # Show open modules (not yet registered)
+        if offen and not include_past:
+            # Filter to current semester range (show semesters 1-5 for WiSe 2025-2026 = 5th sem)
+            current_sem_num = 5  # Could be parsed from currentSemester
+            offen_relevant = [m for m in offen if m.get("semester", 0) <= current_sem_num]
+        else:
+            offen_relevant = offen
+
+        if offen_relevant:
+            console.print("\n")
+            table = Table(
+                title="📝 OFFENE MODULE (noch nicht angemeldet)",
+                title_style="bold",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Prüfungsform", style="cyan")
+            table.add_column("ECTS", justify="right")
+
+            for m in sorted(offen_relevant, key=lambda x: x.get("semester", 99)):
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:50],
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?"),
+                    str(m.get("eCTS", 0)),
+                )
+            console.print(table)
+
+        # Summary panel
+        bestanden = [m for m in modules if m.get("examStatus") == "bestanden"]
+        anerkannt = [m for m in modules if m.get("examStatus") == "anerkannt"]
+
+        summary = f"""
+[green]✓ Bestanden:[/green] {len(bestanden)} Module
+[green]✓ Anerkannt:[/green] {len(anerkannt)} Module
+[red]✗ Nicht bestanden:[/red] {len(nicht_bestanden)} Module
+[blue]○ Angemeldet:[/blue] {len(angemeldet)} Module
+[yellow]○ Abgemeldet:[/yellow] {len(abgemeldet)} Module
+[dim]○ Offen:[/dim] {len(offen)} Module
+        """
+        console.print(Panel(summary.strip(), title="Zusammenfassung", border_style="cyan"))
+
+    # 4. Display calendar events
+    if calendar_events:
+        console.print("\n")
+        table = Table(title="📅 KOMMENDE TERMINE (Moodle Kalender)")
+        table.add_column("Event", style="bold")
+        table.add_column("Datum/Zeit", style="cyan")
+        table.add_column("Kurs", style="dim")
+
+        for event in calendar_events[:10]:  # Limit to 10
+            table.add_row(
+                event.title[:40] if event.title else "?",
+                event.start_time or "?",
+                event.course_name or "",
+            )
+        console.print(table)
+
+    # Final hint
+    console.print("\n[dim]Tipp: Prüfungstermine im Moodle-Portal unter Kalender prüfen![/dim]")
+    console.print("[dim]      kolping export all - für vollständigen Datenexport[/dim]")
+
+
+@app.command("analyze")
+def analyze_captures(
+    docs_dir: str = typer.Option("docs", "--docs", "-d", help="Directory with HTTP captures"),
+    show_all: bool = typer.Option(
+        False, "--all", "-a", help="Show all modules, not just open ones"
+    ),
+) -> None:
+    """
+    Analyze captured HTTP data for exam dates and deadlines.
+
+    Reads from local capture files (docs/ folder) to extract:
+    - GraphQL grade overview with exam status
+    - Moodle calendar events with dates
+    - Klausur (exam) dates
+
+    This works offline using previously captured data.
+    """
+    import json
+    from datetime import datetime
+    from pathlib import Path
+
+    from rich.panel import Panel
+
+    console.print("[bold cyan]📊 Kolping Study Cockpit - Offline Analyse[/bold cyan]")
+    console.print("=" * 60)
+
+    docs_path = Path(docs_dir)
+    if not docs_path.exists():
+        console.print(f"[red]✗ Verzeichnis nicht gefunden: {docs_path}[/red]")
+        raise typer.Exit(code=1)
+
+    # Data containers
+    grade_data = None
+    calendar_events = []
+    student_data = None
+
+    # 1. Find and load GraphQL grade overview
+    console.print("\n[dim]Suche GraphQL Prüfungsdaten...[/dim]")
+    for subdir in sorted(docs_path.iterdir()):
+        if not subdir.is_dir():
+            continue
+        response_file = subdir / "response_body.json"
+        if not response_file.exists():
+            continue
+        try:
+            with response_file.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and "data" in data:
+                if "myStudentGradeOverview" in data["data"]:
+                    grade_data = data["data"]["myStudentGradeOverview"]
+                    console.print(f"[green]✓ Prüfungsdaten gefunden in {subdir.name}/[/green]")
+                if "myStudentData" in data["data"]:
+                    student_data = data["data"]["myStudentData"]
+                    console.print(f"[green]✓ Studentendaten gefunden in {subdir.name}/[/green]")
+        except (json.JSONDecodeError, KeyError):
+            continue
+
+    # 2. Find and parse Moodle calendar HTML
+    console.print("[dim]Suche Moodle Kalender-Daten...[/dim]")
+    for subdir in sorted(docs_path.iterdir()):
+        if not subdir.is_dir():
+            continue
+        for html_file in subdir.glob("*.html"):
+            try:
+                from bs4 import BeautifulSoup
+
+                with html_file.open("r", encoding="utf-8") as f:
+                    soup = BeautifulSoup(f.read(), "html.parser")
+
+                # Look for calendar events
+                event_divs = soup.find_all(
+                    "div", class_="event", attrs={"data-region": "event-item"}
+                )
+                for elem in event_divs:
+                    link = elem.find("a", attrs={"data-event-id": True})
+                    date_div = elem.find("div", class_="date")
+
+                    if link and date_div:
+                        title = link.get_text(strip=True)
+                        date_text = date_div.get_text(strip=True)
+                        # Extract timestamp from link href
+                        href = str(link.get("href", ""))
+                        timestamp = None
+                        if "time=" in href:
+                            import re
+
+                            match = re.search(r"time=(\d+)", href)
+                            if match:
+                                timestamp = int(match.group(1))
+
+                        calendar_events.append(
+                            {
+                                "title": title,
+                                "date_text": date_text.replace("»", "→"),
+                                "timestamp": timestamp,
+                                "url": href,
+                            }
+                        )
+
+                if event_divs:
+                    console.print(
+                        f"[green]✓ {len(event_divs)} Events gefunden in {html_file.name}[/green]"
+                    )
+            except Exception:
+                continue
+
+    # Remove duplicates based on timestamp
+    seen_timestamps = set()
+    unique_events = []
+    for event in calendar_events:
+        ts = event.get("timestamp")
+        if ts and ts not in seen_timestamps:
+            seen_timestamps.add(ts)
+            unique_events.append(event)
+    calendar_events = unique_events
+
+    # 3. Display student info
+    if student_data:
+        name = f"{student_data.get('vorname', '')} {student_data.get('nachname', '')}"
+        console.print(f"\n[bold]Student:[/bold] {name}")
+
+    # 4. Display exam overview from GraphQL
+    if grade_data:
+        current_sem = grade_data.get("currentSemester", "Unbekannt")
+        total_grade = grade_data.get("grade", "-")
+        total_ects = grade_data.get("eCTS", 0)
+
+        console.print(f"[bold]Aktuelles Semester:[/bold] {current_sem}")
+        console.print(f"[bold]Notendurchschnitt:[/bold] {total_grade}")
+        console.print(f"[bold]Erreichte ECTS:[/bold] {total_ects}")
+
+        modules = grade_data.get("modules", [])
+
+        # Find all Klausuren (exams)
+        klausuren = [m for m in modules if m.get("pruefungsform") == "Klausur"]
+
+        if klausuren:
+            console.print("\n")
+            table = Table(
+                title="📝 ALLE KLAUSUREN",
+                title_style="bold magenta",
+                border_style="magenta",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Status", style="cyan")
+            table.add_column("Note", justify="right")
+            table.add_column("ECTS", justify="right")
+
+            for m in sorted(
+                klausuren, key=lambda x: (x.get("semester", 99), x.get("modulbezeichnung", ""))
+            ):
+                status = m.get("examStatus") or "offen"
+                note = m.get("note") or "-"
+                status_style = {
+                    "bestanden": "[green]bestanden[/green]",
+                    "nicht bestanden": "[red]nicht bestanden[/red]",
+                    "angemeldet": "[blue]ANGEMELDET[/blue]",
+                    "abgemeldet": "[yellow]abgemeldet[/yellow]",
+                }.get(status, f"[dim]{status}[/dim]")
+
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:45].strip(),
+                    str(m.get("semester", "?")),
+                    status_style,
+                    str(note),
+                    str(m.get("eCTS", 0)),
+                )
+            console.print(table)
+
+        # Categorize all modules
+        angemeldet = [m for m in modules if m.get("examStatus") == "angemeldet"]
+        nicht_bestanden = [m for m in modules if m.get("examStatus") == "nicht bestanden"]
+        abgemeldet = [m for m in modules if m.get("examStatus") == "abgemeldet"]
+        offen = [
+            m
+            for m in modules
+            if m.get("examStatus") is None and m.get("pruefungsform") != "Anerkennung"
+        ]
+        bestanden = [m for m in modules if m.get("examStatus") == "bestanden"]
+        anerkannt = [m for m in modules if m.get("examStatus") == "anerkannt"]
+
+        # Show registered exams (urgent!)
+        if angemeldet:
+            console.print("\n")
+            table = Table(
+                title="🔴 ANGEMELDETE PRÜFUNGEN (Termine beachten!)",
+                title_style="bold red",
+                border_style="red",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Prüfungsform", style="cyan")
+            table.add_column("ECTS", justify="right")
+
+            for m in angemeldet:
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:50].strip(),
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?"),
+                    str(m.get("eCTS", 0)),
+                )
+            console.print(table)
+
+        # Show failed exams
+        if nicht_bestanden:
+            console.print("\n")
+            table = Table(
+                title="⚠️ NICHT BESTANDEN (Wiederholung nötig)",
+                title_style="bold yellow",
+                border_style="yellow",
+            )
+            table.add_column("Modul", style="bold")
+            table.add_column("Sem.", justify="center")
+            table.add_column("Prüfungsform", style="cyan")
+
+            for m in nicht_bestanden:
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:50].strip(),
+                    str(m.get("semester", "?")),
+                    m.get("pruefungsform", "?"),
+                )
+            console.print(table)
+
+        # Summary
+        summary = f"""
+[green]✓ Bestanden:[/green] {len(bestanden)} Module ({sum(m.get("eCTS", 0) for m in bestanden):.0f} ECTS)
+[green]✓ Anerkannt:[/green] {len(anerkannt)} Module ({sum(m.get("eCTS", 0) for m in anerkannt):.0f} ECTS)
+[red]✗ Nicht bestanden:[/red] {len(nicht_bestanden)} Module
+[blue]○ Angemeldet:[/blue] {len(angemeldet)} Module
+[yellow]○ Abgemeldet:[/yellow] {len(abgemeldet)} Module
+[dim]○ Offen:[/dim] {len(offen)} Module ({sum(m.get("eCTS", 0) for m in offen):.0f} ECTS)
+        """
+        console.print(Panel(summary.strip(), title="Zusammenfassung", border_style="cyan"))
+
+    # 5. Display calendar events with proper dates
+    if calendar_events:
+        console.print("\n")
+        table = Table(title="📅 KOMMENDE TERMINE (aus Moodle Kalender)")
+        table.add_column("Modul/Event", style="bold", max_width=40)
+        table.add_column("Datum & Zeit", style="cyan", max_width=35)
+
+        # Sort by timestamp
+        sorted_events = sorted(
+            [e for e in calendar_events if e.get("timestamp")], key=lambda x: x["timestamp"]
+        )
+
+        for event in sorted_events[:15]:
+            # Format timestamp to readable date
+            ts = event.get("timestamp")
+            if ts:
+                dt = datetime.fromtimestamp(ts)
+                date_formatted = dt.strftime("%a, %d.%m.%Y %H:%M")
+            else:
+                date_formatted = event.get("date_text", "?")
+
+            table.add_row(
+                event.get("title", "?")[:40],
+                date_formatted,
+            )
+        console.print(table)
+
+    # Final summary
+    if not grade_data and not calendar_events:
+        console.print("\n[yellow]Keine Daten gefunden. Stelle sicher, dass:[/yellow]")
+        console.print("  1. HTTP-Captures im docs/ Ordner liegen")
+        console.print("  2. ZIP-Dateien entpackt wurden")
+        console.print("  3. response_body.json oder .html Dateien vorhanden sind")
+    else:
+        console.print("\n[dim]Datenquelle: Offline-Analyse von HTTP-Captures[/dim]")
+
+
+@app.command("fetch")
+def fetch_all_online(
+    output: str = typer.Option(None, "--output", "-o", help="Output JSON file path for export"),
+    limit: int = typer.Option(0, "--limit", "-l", help="Limit number of events (0 = unlimited)"),
+) -> None:
+    """
+    Full online fetch of all study data.
+
+    Fetches LIVE data from:
+    - GraphQL API: All modules, grades, student data
+    - Moodle Portal: All calendar events, courses, assignments
+
+    Requires valid tokens (use 'kolping set-graphql' and 'kolping set-moodle').
+
+    Example:
+        kolping fetch
+        kolping fetch --output study_data.json
+    """
+    import json
+    from datetime import UTC, datetime
+    from pathlib import Path
+
+    from rich.panel import Panel
+
+    console.print("[bold cyan]🌐 Kolping Study Cockpit - Online Vollfetch[/bold cyan]")
+    console.print("=" * 60)
+
+    all_data: dict = {
+        "fetch_timestamp": datetime.now(UTC).isoformat(),
+        "graphql": {},
+        "moodle": {},
+        "errors": [],
+    }
+
+    # 1. GraphQL Full Fetch
+    console.print("\n[bold]1. GraphQL API Fetch[/bold]")
+    try:
+        from kolping_cockpit.graphql_client import KolpingGraphQLClient
+
+        with KolpingGraphQLClient() as client:
+            if not client.is_authenticated:
+                console.print("[red]✗ Kein Bearer Token konfiguriert[/red]")
+                console.print("[dim]  Setze Token mit: kolping set-graphql <TOKEN>[/dim]")
+                all_data["errors"].append("GraphQL: Kein Bearer Token")
+            else:
+                console.print("[dim]  Teste Verbindung...[/dim]")
+                success, msg = client.test_connection()
+                if not success:
+                    console.print(f"[red]✗ Verbindung fehlgeschlagen: {msg}[/red]")
+                    all_data["errors"].append(f"GraphQL: {msg}")
+                else:
+                    console.print("[green]✓ Verbunden[/green]")
+
+                    # Fetch student data
+                    console.print("[dim]  Lade Studentendaten...[/dim]")
+                    response = client.execute_named_query("myStudentData")
+                    if response.data and "myStudentData" in response.data:
+                        all_data["graphql"]["student"] = response.data["myStudentData"]
+                        name = f"{response.data['myStudentData'].get('vorname', '')} {response.data['myStudentData'].get('nachname', '')}"
+                        console.print(f"[green]✓ Student: {name}[/green]")
+                    elif response.has_errors:
+                        console.print(f"[yellow]⚠ Studentendaten: {response.errors}[/yellow]")
+
+                    # Fetch grade overview (all modules)
+                    console.print("[dim]  Lade Prüfungsübersicht...[/dim]")
+                    response = client.execute_named_query("myStudentGradeOverview")
+                    if response.data and "myStudentGradeOverview" in response.data:
+                        overview = response.data["myStudentGradeOverview"]
+                        all_data["graphql"]["gradeOverview"] = overview
+                        modules = overview.get("modules", [])
+                        console.print(f"[green]✓ {len(modules)} Module geladen[/green]")
+                        console.print(
+                            f"[dim]  Durchschnitt: {overview.get('grade', '-')} | "
+                            f"ECTS: {overview.get('eCTS', 0)} | "
+                            f"Semester: {overview.get('currentSemester', '?')}[/dim]"
+                        )
+                    elif response.has_errors:
+                        console.print(f"[yellow]⚠ Prüfungsdaten: {response.errors}[/yellow]")
+
+    except Exception as e:
+        console.print(f"[red]✗ GraphQL Fehler: {e}[/red]")
+        all_data["errors"].append(f"GraphQL: {e}")
+
+    # 2. Moodle Full Fetch
+    console.print("\n[bold]2. Moodle Portal Fetch[/bold]")
+    try:
+        from kolping_cockpit.moodle_client import KolpingMoodleClient
+
+        with KolpingMoodleClient() as client:
+            if not client.is_authenticated:
+                console.print("[red]✗ Keine Moodle Session konfiguriert[/red]")
+                console.print("[dim]  Setze Session mit: kolping set-moodle <SESSION>[/dim]")
+                all_data["errors"].append("Moodle: Keine Session")
+            else:
+                console.print("[dim]  Teste Session...[/dim]")
+                is_valid, msg = client.test_session()
+                if not is_valid:
+                    console.print(f"[red]✗ Session ungültig: {msg}[/red]")
+                    all_data["errors"].append(f"Moodle: {msg}")
+                else:
+                    console.print("[green]✓ Session gültig[/green]")
+
+                    # Fetch dashboard
+                    console.print("[dim]  Lade Dashboard...[/dim]")
+                    dashboard = client.get_dashboard()
+                    all_data["moodle"]["user"] = dashboard.user_name
+                    console.print(f"[green]✓ User: {dashboard.user_name}[/green]")
+
+                    # Fetch courses
+                    console.print("[dim]  Lade Kurse...[/dim]")
+                    courses = client.get_courses()
+                    all_data["moodle"]["courses"] = [
+                        {"id": c.id, "name": c.name, "url": c.url} for c in courses
+                    ]
+                    console.print(f"[green]✓ {len(courses)} Kurse geladen[/green]")
+
+                    # Fetch calendar events (all upcoming)
+                    console.print("[dim]  Lade Kalender-Events...[/dim]")
+                    events = client.get_upcoming_deadlines()
+                    all_data["moodle"]["events"] = [
+                        {
+                            "id": e.id,
+                            "title": e.title,
+                            "start_time": e.start_time,
+                            "course_name": e.course_name,
+                            "url": e.url,
+                        }
+                        for e in events
+                    ]
+                    console.print(f"[green]✓ {len(events)} Events geladen[/green]")
+
+                    # Fetch assignments
+                    console.print("[dim]  Lade Aufgaben...[/dim]")
+                    assignments = client.get_assignments()
+                    all_data["moodle"]["assignments"] = [
+                        {
+                            "id": a.id,
+                            "name": a.name,
+                            "due_date": a.due_date,
+                            "course_name": a.course_name,
+                        }
+                        for a in assignments
+                    ]
+                    console.print(f"[green]✓ {len(assignments)} Aufgaben geladen[/green]")
+
+                    # Fetch grades
+                    console.print("[dim]  Lade Noten...[/dim]")
+                    grades = client.get_grades()
+                    all_data["moodle"]["grades"] = [
+                        {"item": g.item_name, "grade": g.grade} for g in grades
+                    ]
+                    console.print(f"[green]✓ {len(grades)} Noteneinträge[/green]")
+
+    except Exception as e:
+        console.print(f"[red]✗ Moodle Fehler: {e}[/red]")
+        all_data["errors"].append(f"Moodle: {e}")
+
+    # 3. Display Results
+    console.print("\n" + "=" * 60)
+    console.print("[bold]📊 ERGEBNISSE[/bold]\n")
+
+    # Student Info
+    student = all_data["graphql"].get("student", {})
+    if student:
+        console.print(
+            f"[bold]Student:[/bold] {student.get('vorname', '')} {student.get('nachname', '')}"
+        )
+        console.print(f"[dim]Email: {student.get('emailKh', '')}[/dim]")
+
+    # Grade Overview
+    overview = all_data["graphql"].get("gradeOverview", {})
+    if overview:
+        console.print(f"\n[bold]Semester:[/bold] {overview.get('currentSemester', '?')}")
+        console.print(f"[bold]Notendurchschnitt:[/bold] {overview.get('grade', '-')}")
+        console.print(f"[bold]ECTS:[/bold] {overview.get('eCTS', 0)}")
+
+        modules = overview.get("modules", [])
+
+        # Klausuren
+        klausuren = [m for m in modules if m.get("pruefungsform") == "Klausur"]
+        if klausuren:
+            console.print("\n")
+            table = Table(title="📝 KLAUSUREN", title_style="bold magenta")
+            table.add_column("Modul", style="bold", max_width=45)
+            table.add_column("Sem.", justify="center")
+            table.add_column("Status")
+            table.add_column("Note", justify="right")
+
+            for m in sorted(klausuren, key=lambda x: x.get("semester", 99)):
+                status = m.get("examStatus") or "offen"
+                status_fmt = {
+                    "bestanden": "[green]✓[/green]",
+                    "nicht bestanden": "[red]✗[/red]",
+                    "angemeldet": "[blue]●[/blue]",
+                    "abgemeldet": "[yellow]○[/yellow]",
+                }.get(status, "[dim]○[/dim]")
+                table.add_row(
+                    m.get("modulbezeichnung", "?")[:45].strip(),
+                    str(m.get("semester", "?")),
+                    status_fmt,
+                    str(m.get("note") or "-"),
+                )
+            console.print(table)
+
+        # Alle Module (ungecapped)
+        console.print("\n")
+        table = Table(title="📚 ALLE MODULE", title_style="bold")
+        table.add_column("Modul", style="bold", max_width=40)
+        table.add_column("Sem.", justify="center")
+        table.add_column("Prüfungsform", max_width=15)
+        table.add_column("Status")
+        table.add_column("ECTS", justify="right")
+
+        display_modules = modules if limit == 0 else modules[:limit]
+        for m in sorted(
+            display_modules, key=lambda x: (x.get("semester", 99), x.get("modulbezeichnung", ""))
+        ):
+            status = m.get("examStatus") or "-"
+            status_fmt = {
+                "bestanden": "[green]bestanden[/green]",
+                "nicht bestanden": "[red]nicht best.[/red]",
+                "angemeldet": "[blue]ANGEMELDET[/blue]",
+                "abgemeldet": "[yellow]abgemeldet[/yellow]",
+                "anerkannt": "[cyan]anerkannt[/cyan]",
+            }.get(status, f"[dim]{status}[/dim]")
+            table.add_row(
+                m.get("modulbezeichnung", "?")[:40].strip(),
+                str(m.get("semester", "?")),
+                (m.get("pruefungsform") or "?")[:15],
+                status_fmt,
+                str(m.get("eCTS", 0)),
+            )
+        console.print(table)
+
+        # Summary
+        bestanden = [m for m in modules if m.get("examStatus") == "bestanden"]
+        anerkannt = [m for m in modules if m.get("examStatus") == "anerkannt"]
+        nicht_bestanden = [m for m in modules if m.get("examStatus") == "nicht bestanden"]
+        angemeldet = [m for m in modules if m.get("examStatus") == "angemeldet"]
+        abgemeldet = [m for m in modules if m.get("examStatus") == "abgemeldet"]
+        offen = [
+            m
+            for m in modules
+            if m.get("examStatus") is None and m.get("pruefungsform") != "Anerkennung"
+        ]
+
+        summary = f"""
+[green]✓ Bestanden:[/green] {len(bestanden)} ({sum(m.get("eCTS", 0) for m in bestanden):.0f} ECTS)
+[cyan]✓ Anerkannt:[/cyan] {len(anerkannt)} ({sum(m.get("eCTS", 0) for m in anerkannt):.0f} ECTS)
+[red]✗ Nicht bestanden:[/red] {len(nicht_bestanden)}
+[blue]● Angemeldet:[/blue] {len(angemeldet)}
+[yellow]○ Abgemeldet:[/yellow] {len(abgemeldet)}
+[dim]○ Offen:[/dim] {len(offen)} ({sum(m.get("eCTS", 0) for m in offen):.0f} ECTS)
+        """
+        console.print(Panel(summary.strip(), title="Zusammenfassung", border_style="cyan"))
+
+    # Moodle Events (all, ungecapped)
+    moodle_events = all_data["moodle"].get("events", [])
+    if moodle_events:
+        console.print("\n")
+        table = Table(title="📅 ALLE TERMINE (Moodle Kalender)", title_style="bold green")
+        table.add_column("Event", style="bold", max_width=45)
+        table.add_column("Datum/Zeit", style="cyan")
+        table.add_column("Kurs", style="dim", max_width=20)
+
+        display_events = moodle_events if limit == 0 else moodle_events[:limit]
+        for event in display_events:
+            table.add_row(
+                (event.get("title") or "?")[:45],
+                event.get("start_time") or "?",
+                (event.get("course_name") or "")[:20],
+            )
+        console.print(table)
+
+    # Courses
+    courses = all_data["moodle"].get("courses", [])
+    if courses:
+        console.print("\n")
+        table = Table(title="📖 EINGESCHRIEBENE KURSE", title_style="bold blue")
+        table.add_column("Kurs", style="bold")
+        table.add_column("ID", style="dim")
+
+        for course in courses[:20]:  # Show first 20
+            table.add_row(course.get("name", "?")[:60], course.get("id", "?"))
+        if len(courses) > 20:
+            console.print(f"[dim]  ... und {len(courses) - 20} weitere Kurse[/dim]")
+        console.print(table)
+
+    # Errors
+    if all_data["errors"]:
+        console.print("\n[yellow]⚠ Fehler während des Fetchs:[/yellow]")
+        for err in all_data["errors"]:
+            console.print(f"  [red]• {err}[/red]")
+
+    # Save to file if requested
+    if output:
+        output_path = Path(output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as f:
+            json.dump(all_data, f, indent=2, ensure_ascii=False, default=str)
+        console.print(f"\n[green]✓ Daten exportiert nach: {output_path}[/green]")
+
+    console.print("\n[dim]Datenquelle: Live Online-Abfrage[/dim]")
+
+
+@app.command("get-token")
+def get_graphql_token_auto(
+    headless: bool = typer.Option(
+        False,
+        "--headless",
+        help="Run browser in headless mode (may not work with MFA)",
+    ),
+    timeout: int = typer.Option(
+        120,
+        "--timeout",
+        "-t",
+        help="Timeout in seconds for login completion",
+    ),
+) -> None:
+    """
+    Automatically extract GraphQL Bearer token via browser.
+
+    Opens a browser, logs into cms.kolping-hochschule.de, and captures
+    the Bearer token from network requests.
+
+    The token is required for accessing the "Mein Studium" GraphQL API.
+    """
+    from kolping_cockpit.settings import store_secret
+
+    console.print("[bold cyan]🔑 GraphQL Token Extraktion[/bold cyan]")
+    console.print("=" * 50)
+    console.print()
+    console.print("Dieser Befehl öffnet einen Browser und loggt automatisch ein.")
+    console.print("Nach erfolgreicher Anmeldung wird der GraphQL Token extrahiert.")
+    console.print()
+
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        console.print("[red]✗ Playwright nicht installiert![/red]")
+        console.print("  Installiere mit: pip install playwright && playwright install chromium")
+        raise typer.Exit(code=1)
+
+    captured_token: str | None = None
+    target_audience = "api://b3d6dbac-7f13-4032-9e12-c0aae5910e20"
+
+    def handle_request(request):
+        """Capture Authorization headers from GraphQL requests."""
+        nonlocal captured_token
+        url = request.url
+
+        # Look for GraphQL requests or any request with Bearer token
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.startswith("Bearer ") and "graphql" in url.lower():
+            token = auth_header[7:]  # Remove "Bearer " prefix
+            # Verify it's the correct token by checking audience
+            try:
+                import base64
+                import json as json_mod
+
+                # Decode JWT payload (middle part)
+                parts = token.split(".")
+                if len(parts) >= 2:
+                    # Add padding if needed
+                    payload_b64 = parts[1]
+                    padding = 4 - len(payload_b64) % 4
+                    if padding != 4:
+                        payload_b64 += "=" * padding
+                    payload = json_mod.loads(base64.urlsafe_b64decode(payload_b64))
+                    aud = payload.get("aud", "")
+                    if aud == target_audience:
+                        captured_token = token
+                        console.print("[green]✓ Token mit korrekter Audience gefunden![/green]")
+                        console.print(f"  [dim]aud: {aud}[/dim]")
+            except Exception:
+                pass  # Ignore decode errors
+
+    console.print("[yellow]Starte Browser...[/yellow]")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=headless)
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 800},
+        )
+        page = context.new_page()
+
+        # Intercept all requests to capture Authorization headers
+        page.on("request", handle_request)
+
+        try:
+            # Navigate to CMS which hosts the "Mein Studium" app
+            cms_url = "https://cms.kolping-hochschule.de/"
+            console.print(f"[cyan]Navigiere zu: {cms_url}[/cyan]")
+            page.goto(cms_url, timeout=30000)
+
+            console.print()
+            console.print("[bold yellow]⚡ AKTION ERFORDERLICH:[/bold yellow]")
+            console.print("1. Logge dich im Browser ein (Microsoft SSO)")
+            console.print("2. Navigiere zu 'Mein Studium' wenn nötig")
+            console.print("3. Warte bis die Seite vollständig geladen ist")
+            console.print()
+            console.print(f"[dim]Warte max. {timeout} Sekunden auf Token...[/dim]")
+
+            # Wait for token to be captured or timeout
+            import time
+
+            start_time = time.time()
+            while not captured_token and (time.time() - start_time) < timeout:
+                # Check if we're on a page that might have GraphQL
+                current_url = page.url
+                if "khs-meinstudium" in current_url or "mein-studium" in current_url.lower():
+                    console.print(f"[green]✓ Auf Mein Studium Seite: {current_url}[/green]")
+
+                    # Try to trigger a GraphQL request by navigating/refreshing
+                    page.reload()
+                    time.sleep(3)
+
+                time.sleep(1)
+
+            if captured_token:
+                # Store the token
+                success = store_secret("graphql_bearer_token", captured_token)
+                if success:
+                    console.print()
+                    console.print(
+                        "[bold green]✓ Token erfolgreich extrahiert und gespeichert![/bold green]"
+                    )
+                    console.print()
+                    # Show token preview
+                    console.print(
+                        f"[dim]Token (gekürzt): {captured_token[:50]}...{captured_token[-20:]}[/dim]"
+                    )
+                else:
+                    console.print("[red]✗ Konnte Token nicht speichern[/red]")
+                    raise typer.Exit(code=1)
+            else:
+                console.print()
+                console.print("[red]✗ Kein Token gefunden![/red]")
+                console.print()
+                console.print("[yellow]Mögliche Ursachen:[/yellow]")
+                console.print("  • Login nicht abgeschlossen")
+                console.print("  • Nicht zu 'Mein Studium' navigiert")
+                console.print("  • Timeout zu kurz (--timeout erhöhen)")
+                console.print()
+                console.print("[cyan]Alternative: Manuell Token setzen[/cyan]")
+                console.print("  kolping set-graphql")
+                raise typer.Exit(code=1)
+
+        except Exception as e:
+            error_msg = str(e)
+            if "Timeout" in error_msg:
+                console.print("[red]✗ Timeout - Seite hat zu lange gebraucht[/red]")
+            else:
+                console.print(f"[red]✗ Fehler: {error_msg}[/red]")
+            raise typer.Exit(code=1)
+
+        finally:
+            context.close()
+            browser.close()
+
+
+@app.command("extract-token")
+def extract_token_from_captures() -> None:
+    """
+    Extract GraphQL token from existing HTTP captures in docs/ folder.
+
+    Use this if you have recent HAR/HTTP captures with a valid token.
+    """
+    import base64
+    import json
+    import re
+    from pathlib import Path
+
+    from kolping_cockpit.settings import store_secret
+
+    console.print("[bold cyan]🔍 Token aus HTTP Captures extrahieren[/bold cyan]")
+    console.print("=" * 50)
+
+    docs_path = Path("/workspaces/kolping-study-cockpit/docs")
+    target_audience = "api://b3d6dbac-7f13-4032-9e12-c0aae5910e20"
+
+    found_tokens: list[tuple[str, str, str]] = []  # (token, aud, source)
+
+    # Search all numbered directories
+    for i in range(1, 100):
+        dir_path = docs_path / str(i)
+        if not dir_path.exists():
+            continue
+
+        # Check request.json for authorization header
+        request_json = dir_path / "request.json"
+        if request_json.exists():
+            try:
+                with request_json.open() as f:
+                    data = json.load(f)
+                    if isinstance(data, dict):
+                        auth_header = data.get("authorization", "")
+                        if auth_header.startswith("Bearer "):
+                            token = auth_header[7:]  # Remove "Bearer " prefix
+                            try:
+                                parts = token.split(".")
+                                if len(parts) >= 2:
+                                    payload_b64 = parts[1]
+                                    padding = 4 - len(payload_b64) % 4
+                                    if padding != 4:
+                                        payload_b64 += "=" * padding
+                                    payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+                                    aud = payload.get("aud", "unknown")
+                                    if not any(t[0] == token for t in found_tokens):
+                                        found_tokens.append((token, aud, str(request_json)))
+                            except Exception:
+                                pass
+            except Exception:
+                pass
+
+        # Also check request.txt and request.hcy files
+        for filename in ["request.txt", "request.hcy"]:
+            request_file = dir_path / filename
+            if request_file.exists():
+                content = request_file.read_text(errors="ignore")
+                # Look for Authorization: Bearer xxx
+                match = re.search(
+                    r"[Aa]uthorization:\s*Bearer\s+([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)",
+                    content,
+                )
+                if match:
+                    token = match.group(1)
+                    try:
+                        parts = token.split(".")
+                        if len(parts) >= 2:
+                            payload_b64 = parts[1]
+                            padding = 4 - len(payload_b64) % 4
+                            if padding != 4:
+                                payload_b64 += "=" * padding
+                            payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+                            aud = payload.get("aud", "unknown")
+                            if not any(t[0] == token for t in found_tokens):
+                                found_tokens.append((token, aud, str(request_file)))
+                    except Exception:
+                        pass
+
+    if not found_tokens:
+        console.print("[red]✗ Keine Token in HTTP Captures gefunden[/red]")
+        raise typer.Exit(code=1)
+
+    console.print(f"\n[green]Gefundene Tokens: {len(found_tokens)}[/green]\n")
+
+    # Find token with correct audience
+    correct_token = None
+    for token, aud, source in found_tokens:
+        is_correct = aud == target_audience
+        marker = "[bold green]✓ KORREKT[/bold green]" if is_correct else "[dim]falsche aud[/dim]"
+        console.print(f"  {marker}")
+        console.print(f"    [dim]Quelle: {source}[/dim]")
+        console.print(f"    [dim]Audience: {aud}[/dim]")
+
+        if is_correct:
+            correct_token = token
+
+    if correct_token:
+        console.print()
+        if typer.confirm("Token mit korrekter Audience gefunden. Speichern?"):
+            success = store_secret("graphql_bearer_token", correct_token)
+            if success:
+                console.print("[bold green]✓ Token gespeichert![/bold green]")
+            else:
+                console.print("[red]✗ Speichern fehlgeschlagen[/red]")
+    else:
+        console.print()
+        console.print("[yellow]⚠ Kein Token mit korrekter Audience gefunden.[/yellow]")
+        console.print(f"  Benötigte Audience: {target_audience}")
+        console.print()
+        console.print("[cyan]Lösung: Neue HTTP Capture erstellen oder Browser-Login nutzen[/cyan]")
+        console.print("  kolping get-token")
+
+
 if __name__ == "__main__":
     app()

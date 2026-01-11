@@ -201,7 +201,7 @@ class KolpingMoodleClient:
 
         seen_ids: set[str] = set()
         for elem in course_elements:
-            href = elem.get("href", "")
+            href = str(elem.get("href", ""))
             match = re.search(r"id=(\d+)", href)
             if not match:
                 continue
@@ -234,28 +234,51 @@ class KolpingMoodleClient:
         """Extract calendar events from dashboard HTML."""
         events = []
 
-        # Look for event blocks (upcoming deadlines, etc.)
-        event_elements = soup.find_all(class_=re.compile(r"event|deadline|assignment"))
+        # Look for event blocks with data-region="event-item" (Moodle calendar structure)
+        event_elements = soup.find_all("div", class_="event", attrs={"data-region": "event-item"})
+
+        # Fallback: try broader search if specific structure not found
+        if not event_elements:
+            event_elements = soup.find_all(class_=re.compile(r"event|deadline|assignment"))
 
         for elem in event_elements:
-            # Try to extract event ID from links
-            link = elem.find("a", href=re.compile(r"event|calendar|mod"))
+            # Try to extract event ID and title from the event link
+            link = elem.find("a", attrs={"data-event-id": True})
+            if not link:
+                link = elem.find("a", href=re.compile(r"event|calendar|mod"))
+
             event_id = "unknown"
-            url = None
+            url: str | None = None
+            title = ""
 
             if link:
-                href = link.get("href", "")
-                match = re.search(r"id=(\d+)", href)
-                if match:
-                    event_id = match.group(1)
+                event_id = str(link.get("data-event-id", "unknown"))
+                href = str(link.get("href", ""))
+                if not event_id or event_id == "unknown":
+                    match = re.search(r"id=(\d+)", href)
+                    if match:
+                        event_id = match.group(1)
                 url = href if href.startswith("http") else f"{self.base_url}{href}"
+                title = link.get_text(strip=True)
 
-            title = elem.get_text(strip=True)[:200]
+            # Extract date from the date div
+            date_div = elem.find("div", class_="date")
+            start_time = None
+            if date_div:
+                date_text = date_div.get_text(strip=True)
+                # Format: "Dienstag, 13. Januar, 18:00 » 19:30"
+                start_time = date_text.replace("»", "→").replace("&raquo;", "→")
+
+            # Fallback title extraction
+            if not title:
+                title = elem.get_text(strip=True)[:200]
+
             if title:
                 events.append(
                     MoodleEvent(
-                        id=event_id,
-                        title=title,
+                        id=str(event_id),
+                        title=title[:100],
+                        start_time=start_time,
                         url=url,
                     )
                 )
@@ -330,7 +353,7 @@ class KolpingMoodleClient:
         assign_links = soup.find_all("a", href=re.compile(r"/mod/assign/view\.php\?id=\d+"))
 
         for link in assign_links:
-            href = link.get("href", "")
+            href = str(link.get("href", ""))
             match = re.search(r"id=(\d+)", href)
             if not match:
                 continue

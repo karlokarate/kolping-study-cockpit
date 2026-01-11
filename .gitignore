@@ -221,3 +221,7 @@ exports/
 .kolping-cockpit/
 ~/.kolping-cockpit/
 .secrets.json
+
+# HTTP Captures (contain secrets)
+docs/[0-9]*/
+docs/*.zip
