@@ -225,3 +225,17 @@ exports/
 # HTTP Captures (contain secrets)
 docs/[0-9]*/
 docs/*.zip
+
+# Kotlin Multiplatform / Android
+kmp/.gradle/
+kmp/build/
+kmp/*/build/
+kmp/.idea/
+kmp/*.iml
+kmp/local.properties
+kmp/.DS_Store
+kmp/captures/
+kmp/.externalNativeBuild
+kmp/.cxx
+kmp/*.apk
+kmp/*.aab
