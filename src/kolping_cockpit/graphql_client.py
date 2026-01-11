@@ -1,20 +1,15 @@
 """GraphQL client for Kolping Study Cockpit.
 
-Based on the introspection schema from:
+Based on captured API responses from:
 https://app-kolping-prod-gateway.azurewebsites.net/graphql
+via https://cms.kolping-hochschule.de/ ("Mein Studium")
 
-Available queries discovered:
-- myStudentGradeOverview: Student grade overview
-- myStudentData: Student personal data
-- myTranscriptOfRecords: Academic transcript
-- myCertificateOfStudy: Certificate of study
-- moduls: List of all modules
-- modul(id): Single module by ID
-- pruefungs: List of all exams
-- pruefungsergebnis(id): Single exam result by ID
-- semesters: List of all semesters
-- matchModulStudent: Student-module mappings
-- students: List of students
+IMPORTANT: This API REQUIRES Bearer token authentication!
+Token is obtained from Microsoft Entra login on cms.kolping-hochschule.de
+
+Available queries (verified from real responses):
+- myStudentData: Student personal data (name, address, email, etc.)
+- myStudentGradeOverview: Complete grade overview with modules and student data
 """
 
 from dataclasses import dataclass
@@ -22,7 +17,7 @@ from typing import Any
 
 import httpx
 
-from kolping_cockpit.settings import get_settings
+from kolping_cockpit.settings import get_secret_from_env_or_keyring, get_settings
 
 
 @dataclass
@@ -51,131 +46,127 @@ class GraphQLResponse:
 class KolpingGraphQLClient:
     """GraphQL client for Kolping Study API.
 
-    Handles authentication and provides typed query methods.
-    NOTE: This API works WITHOUT authentication for public queries!
-    Personal data (myStudentData etc.) requires auth.
+    Handles Bearer token authentication and provides typed query methods.
+    REQUIRES authentication - token from cms.kolping-hochschule.de login.
     """
 
-    # GraphQL queries based on discovered schema (introspection 2026-01-11)
-    # Field names from __type introspection queries
+    # GraphQL queries verified from captured API responses (2026-01-11)
+    # Field names extracted from real response_body.json files
     QUERIES = {
+        # Full student data query (from docs/6/request_body.json)
         "myStudentData": """
-            query MyStudentData {
+            query gtMyStudentData {
                 myStudentData {
                     studentId
+                    geschlechtTnid
+                    titel
+                    akademischerGradTnid
                     vorname
                     nachname
-                    emailKh
-                    emailPrivat
                     geburtsdatum
                     geburtsort
+                    geburtslandTnid
+                    staatsangehoerigkeitTnid
+                    createdAt
+                    wohnlandTnid
+                    telefonnummer
+                    emailPrivat
                     strasse
                     hausnummer
                     plz
                     wohnort
-                    telefonnummer
-                    hochschulsemester
-                    studienstartSemesterId
-                    studienstartStudiengangKuerzel
+                    benutzername
+                    emailKh
+                    notizen
+                    bemerkung
+                    akademischerGrad
+                    geburtsland
+                    staatsangehoerigkeit
+                    wohnland
+                }
+            }
+        """,
+        # Complete grade overview with modules (from docs/7/request_body.json)
+        "myStudentGradeOverview": """
+            query getMyStudentGradeOverview {
+                myStudentGradeOverview {
+                    modules {
+                        modulId
+                        semester
+                        modulbezeichnung
+                        eCTS
+                        pruefungsId
+                        pruefungsform
+                        grade
+                        points
+                        note
+                        color
+                        examStatus
+                        eCTSString
+                    }
+                    grade
+                    eCTS
+                    student {
+                        id
+                        geschlechtTnid
+                        titel
+                        akademischerGradTnid
+                        vorname
+                        nachname
+                        geburtsdatum
+                        geburtsort
+                        geburtslandTnid
+                        staatsangehoerigkeitTnid
+                        createdAt
+                        wohnlandTnid
+                        telefonnummer
+                        emailPrivat
+                        strasse
+                        hausnummer
+                        plz
+                        wohnort
+                        benutzername
+                        emailKh
+                        notizen
+                        bemerkung
+                    }
+                    currentSemester
+                }
+            }
+        """,
+        # Simplified student data (from docs/5/request_body.json)
+        "myStudentDataSimple": """
+            query RaftgetmyStudentData {
+                result: myStudentData {
+                    studentId
                     anrede
                     titel
-                    benutzername
-                }
-            }
-        """,
-        "myStudentGradeOverview": """
-            query MyStudentGradeOverview {
-                myStudentGradeOverview {
-                    studentId
-                    note
-                    gesamtEcts
-                    offeneEcts
-                    bestandeneEcts
-                }
-            }
-        """,
-        "myTranscriptOfRecords": """
-            query MyTranscriptOfRecords {
-                myTranscriptOfRecords {
-                    studentId
-                }
-            }
-        """,
-        "myCertificateOfStudy": """
-            query MyCertificateOfStudy {
-                myCertificateOfStudy {
-                    studentId
-                }
-            }
-        """,
-        "moduls": """
-            query Moduls {
-                moduls {
-                    id
-                    modulName
-                    modulNameIntern
-                    modulkuerzel
-                    ectspunkte
-                    workload
-                    qualifikationsziele
-                    inhalte
-                    dauer
-                }
-            }
-        """,
-        "semesters": """
-            query Semesters {
-                semesters {
-                    id
-                    semesterName
-                    semesterType
-                    semesterPeriode
-                    sortierung
-                }
-            }
-        """,
-        "pruefungs": """
-            query Pruefungs {
-                pruefungs {
-                    id
-                    modulId
-                    datum
-                    pruefungsformId
-                    pruefungsortId
-                }
-            }
-        """,
-        "matchModulStudents": """
-            query MatchModulStudents {
-                matchModulStudents {
-                    id
-                    studentId
-                    modulId
-                    note
-                    ects
-                    modulStudentStatusId
-                }
-            }
-        """,
-        "studiengangs": """
-            query Studiengangs {
-                studiengangs {
-                    id
-                    kuerzel
-                    bezeichnung
-                    ects
+                    akademischerGrad
+                    vorname
+                    nachname
+                    geburtsdatum
+                    geburtsort
+                    geburtsland
+                    staatsangehoerigkeit
+                    wohnland
+                    telefonnummer
+                    emailPrivat
+                    strasse
+                    hausnummer
+                    plz
+                    wohnort
                 }
             }
         """,
     }
 
-    # Simplified queries for initial testing (less fields = less likely to fail)
+    # Simplified queries with fewer fields for quick checks
     QUERIES_SIMPLE = {
         "myStudentData": """
-            query { myStudentData { studentId vorname nachname emailKh } }
+            query { myStudentData { studentId vorname nachname emailKh emailPrivat } }
         """,
         "myStudentGradeOverview": """
-            query { myStudentGradeOverview { studentId note gesamtEcts } }
+            query { myStudentGradeOverview { grade eCTS currentSemester } }
         """,
         "moduls": """
             query { moduls { id modulName modulkuerzel ectspunkte } }
@@ -195,26 +186,32 @@ class KolpingGraphQLClient:
         """Initialize the GraphQL client.
 
         Args:
-            bearer_token: Optional bearer token (NOT required for this API).
+            bearer_token: Optional bearer token. If not provided, tries to load
+                          from keyring/env (KOLPING_GRAPHQL_BEARER_TOKEN).
         """
         self.settings = get_settings()
         self.endpoint = self.settings.graphql_endpoint
 
-        # Note: This API does NOT require authentication
-        # Bearer token causes "Unexpected Execution Error"
-        self._bearer_token = None  # Disabled - API works without auth
+        # Try to get bearer token from various sources
+        self._bearer_token = bearer_token
+        if not self._bearer_token:
+            self._bearer_token = get_secret_from_env_or_keyring("graphql_bearer_token")
 
         self._client: httpx.Client | None = None
 
     @property
     def client(self) -> httpx.Client:
-        """Get or create HTTP client."""
+        """Get or create HTTP client with Bearer auth if available."""
         if self._client is None:
             headers = {
                 "Content-Type": "application/json",
-                "Accept": "application/json",
+                "Accept": "*/*",
+                "Origin": "https://cms.kolping-hochschule.de",
+                "Referer": "https://cms.kolping-hochschule.de/",
             }
-            # Note: Do NOT send Bearer token - causes errors
+            # Add Bearer token if available (required for personal data)
+            if self._bearer_token:
+                headers["Authorization"] = f"Bearer {self._bearer_token}"
 
             self._client = httpx.Client(
                 headers=headers,
@@ -293,65 +290,26 @@ class KolpingGraphQLClient:
             )
         return self.execute(queries[query_name])
 
-    # Convenience methods for each query type
+    # Convenience methods for verified working queries
     def get_my_student_data(self, simple: bool = False) -> GraphQLResponse:
-        """Get current student's personal data."""
+        """Get current student's personal data.
+
+        Returns fields like: studentId, vorname, nachname, emailKh, emailPrivat,
+        geburtsdatum, geburtsort, strasse, plz, wohnort, telefonnummer, etc.
+        """
         return self.execute_named_query("myStudentData", simple=simple)
 
     def get_my_grade_overview(self, simple: bool = False) -> GraphQLResponse:
-        """Get current student's grade overview."""
+        """Get current student's complete grade overview.
+
+        Returns:
+        - modules: List of all modules with grades, ECTS, exam status
+        - grade: Overall grade (Durchschnittsnote)
+        - eCTS: Total ECTS earned
+        - currentSemester: Current semester name
+        - student: Full student data
+        """
         return self.execute_named_query("myStudentGradeOverview", simple=simple)
-
-    def get_my_transcript(self) -> GraphQLResponse:
-        """Get current student's transcript of records."""
-        return self.execute_named_query("myTranscriptOfRecords")
-
-    def get_my_certificate(self) -> GraphQLResponse:
-        """Get current student's certificate of study."""
-        return self.execute_named_query("myCertificateOfStudy")
-
-    def get_modules(self, simple: bool = False) -> GraphQLResponse:
-        """Get all available modules."""
-        return self.execute_named_query("moduls", simple=simple)
-
-    def get_module(self, module_id: str) -> GraphQLResponse:
-        """Get a specific module by ID."""
-        query = """
-            query GetModul($id: ID!) {
-                modul(id: $id) {
-                    id name code beschreibung ects semester
-                    pruefungsform studiengang verantwortlicher
-                }
-            }
-        """
-        return self.execute(query, variables={"id": module_id})
-
-    def get_semesters(self, simple: bool = False) -> GraphQLResponse:
-        """Get all semesters."""
-        return self.execute_named_query("semesters", simple=simple)
-
-    def get_exams(self, simple: bool = False) -> GraphQLResponse:
-        """Get all exam appointments (Prüfungen)."""
-        return self.execute_named_query("pruefungs", simple=simple)
-
-    def get_exam_result(self, exam_id: str) -> GraphQLResponse:
-        """Get a specific exam result."""
-        query = """
-            query GetPruefungsergebnis($id: ID!) {
-                pruefungsergebnis(id: $id) {
-                    id modulId modulName note ects datum versuch status
-                }
-            }
-        """
-        return self.execute(query, variables={"id": exam_id})
-
-    def get_student_modules(self) -> GraphQLResponse:
-        """Get student-module mappings."""
-        return self.execute_named_query("matchModulStudents")
-
-    def get_studiengangs(self, simple: bool = False) -> GraphQLResponse:
-        """Get all study programs."""
-        return self.execute_named_query("studiengangs", simple=simple)
 
     def export_all(self, simple: bool = True) -> dict[str, Any]:
         """Export all available data.
@@ -372,37 +330,17 @@ class KolpingGraphQLClient:
             "errors": {},
         }
 
-        # Public queries (no auth required)
-        public_queries = [
-            ("modules", self.get_modules),
-            ("semesters", self.get_semesters),
-            ("exams", self.get_exams),
-            ("studiengangs", self.get_studiengangs),
-        ]
-
-        # Personal queries (require auth)
+        # Personal queries (require Bearer token auth)
+        # These are the only verified working queries from captured responses
         personal_queries = [
             ("student_data", self.get_my_student_data),
             ("grade_overview", self.get_my_grade_overview),
-            ("student_modules", self.get_student_modules),
         ]
 
-        # Execute public queries first
-        for name, query_func in public_queries:
-            try:
-                response = (
-                    query_func(simple=simple)
-                    if "simple" in query_func.__code__.co_varnames
-                    else query_func()
-                )
-                if response.has_errors:
-                    results["errors"][name] = [e.message for e in response.errors or []]
-                if response.data:
-                    results["data"][name] = response.data
-            except Exception as e:
-                results["errors"][name] = str(e)
+        if not self.is_authenticated:
+            results["errors"]["auth"] = "No Bearer token - personal data queries will fail"
 
-        # Execute personal queries (may fail without auth)
+        # Execute personal queries
         for name, query_func in personal_queries:
             try:
                 response = (
@@ -416,26 +354,6 @@ class KolpingGraphQLClient:
                     results["data"][name] = response.data
             except Exception as e:
                 results["errors"][name] = str(e)
-
-        # Also try full queries if not using simple mode
-        if not simple:
-            try:
-                transcript = self.get_my_transcript()
-                if transcript.data:
-                    results["data"]["transcript"] = transcript.data
-                if transcript.has_errors:
-                    results["errors"]["transcript"] = [e.message for e in transcript.errors or []]
-            except Exception as e:
-                results["errors"]["transcript"] = str(e)
-
-            try:
-                certificate = self.get_my_certificate()
-                if certificate.data:
-                    results["data"]["certificate"] = certificate.data
-                if certificate.has_errors:
-                    results["errors"]["certificate"] = [e.message for e in certificate.errors or []]
-            except Exception as e:
-                results["errors"]["certificate"] = str(e)
 
         return results
 
