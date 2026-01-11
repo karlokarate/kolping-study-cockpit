@@ -93,3 +93,93 @@ def test_export_moodle_command_no_session(mock_client_class):
 
     # Should exit with error when no session
     assert result.exit_code == 1
+
+
+@patch("kolping_cockpit.graphql_client.KolpingGraphQLClient")
+@patch("kolping_cockpit.moodle_client.KolpingMoodleClient")
+def test_exams_command_no_auth(mock_moodle_class, mock_graphql_class):
+    """Test exams command without authentication."""
+    # Mock GraphQL client
+    mock_graphql = MagicMock()
+    mock_graphql.__enter__ = MagicMock(return_value=mock_graphql)
+    mock_graphql.__exit__ = MagicMock(return_value=False)
+    mock_graphql.is_authenticated = False
+    mock_graphql_class.return_value = mock_graphql
+
+    # Mock Moodle client
+    mock_moodle = MagicMock()
+    mock_moodle.__enter__ = MagicMock(return_value=mock_moodle)
+    mock_moodle.__exit__ = MagicMock(return_value=False)
+    mock_moodle.is_authenticated = False
+    mock_moodle_class.return_value = mock_moodle
+
+    result = runner.invoke(app, ["exams"])
+
+    # Should complete but show warnings about missing auth
+    assert result.exit_code == 0
+    assert "nicht verfügbar" in result.stdout.lower() or "not available" in result.stdout.lower()
+
+
+@patch("kolping_cockpit.graphql_client.KolpingGraphQLClient")
+@patch("kolping_cockpit.moodle_client.KolpingMoodleClient")
+def test_exams_command_with_analyze(mock_moodle_class, mock_graphql_class):
+    """Test exams command with --analyze flag."""
+    # Mock GraphQL client
+    mock_graphql = MagicMock()
+    mock_graphql.__enter__ = MagicMock(return_value=mock_graphql)
+    mock_graphql.__exit__ = MagicMock(return_value=False)
+    mock_graphql.is_authenticated = False
+    mock_graphql_class.return_value = mock_graphql
+
+    # Mock Moodle client
+    mock_moodle = MagicMock()
+    mock_moodle.__enter__ = MagicMock(return_value=mock_moodle)
+    mock_moodle.__exit__ = MagicMock(return_value=False)
+    mock_moodle.is_authenticated = False
+    mock_moodle_class.return_value = mock_moodle
+
+    result = runner.invoke(app, ["exams", "--analyze"])
+
+    # Should complete and show analysis section
+    assert result.exit_code == 0
+    assert "schritt 1" in result.stdout.lower() or "step 1" in result.stdout.lower()
+
+
+@patch("kolping_cockpit.graphql_client.KolpingGraphQLClient")
+@patch("kolping_cockpit.moodle_client.KolpingMoodleClient")
+def test_exams_command_with_semester_filter(mock_moodle_class, mock_graphql_class):
+    """Test exams command with --semester flag."""
+    # Mock GraphQL client with data
+    mock_graphql = MagicMock()
+    mock_graphql.__enter__ = MagicMock(return_value=mock_graphql)
+    mock_graphql.__exit__ = MagicMock(return_value=False)
+    mock_graphql.is_authenticated = True
+    mock_graphql.test_connection.return_value = (True, "Connected")
+    
+    # Mock grade overview response
+    mock_response = MagicMock()
+    mock_response.data = {
+        "myStudentGradeOverview": {
+            "currentSemester": "3. Semester",
+            "grade": "1.5",
+            "eCTS": 90,
+            "modules": [
+                {"modulbezeichnung": "Test Module", "semester": 3, "examStatus": None, "pruefungsform": "Klausur", "eCTS": 5}
+            ]
+        }
+    }
+    mock_response.has_errors = False
+    mock_graphql.execute_named_query.return_value = mock_response
+    mock_graphql_class.return_value = mock_graphql
+
+    # Mock Moodle client
+    mock_moodle = MagicMock()
+    mock_moodle.__enter__ = MagicMock(return_value=mock_moodle)
+    mock_moodle.__exit__ = MagicMock(return_value=False)
+    mock_moodle.is_authenticated = False
+    mock_moodle_class.return_value = mock_moodle
+
+    result = runner.invoke(app, ["exams", "--semester", "3"])
+
+    # Should complete successfully
+    assert result.exit_code == 0

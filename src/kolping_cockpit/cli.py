@@ -1732,17 +1732,7 @@ def show_comprehensive_exams(
                         exam_dates = response.data["pruefungs"]
                         console.print(f"[green]✓ {len(exam_dates)} Prüfungstermine gefunden[/green]")
 
-                    # Get all modules
-                    response = client.execute_named_query("moduls", simple=True)
-                    if response.data and "moduls" in response.data:
-                        all_modules = response.data["moduls"]
-                        console.print(f"[green]✓ {len(all_modules)} Module geladen[/green]")
 
-                    # Get enrolled modules
-                    response = client.execute_named_query("matchModulStudent", simple=True)
-                    if response.data and "matchModulStudent" in response.data:
-                        enrolled_modules = response.data["matchModulStudent"]
-                        console.print(f"[green]✓ {len(enrolled_modules)} Einschreibungen gefunden[/green]")
     except Exception as e:
         errors.append(f"GraphQL: {e}")
         console.print(f"[red]✗ GraphQL Fehler: {e}[/red]")
@@ -1781,7 +1771,19 @@ def show_comprehensive_exams(
     # Step 3: Display comprehensive overview
     if grade_data:
         current_sem = grade_data.get("currentSemester", "Unbekannt")
-        current_sem_num = int(current_sem.split()[0]) if current_sem and current_sem[0].isdigit() else None
+        
+        # Safely parse current semester number
+        current_sem_num = None
+        if isinstance(current_sem, str) and current_sem.strip():
+            parts = current_sem.strip().split()
+            if parts:
+                # Extract leading digits from first token (e.g. "1.", "1", "1.Semester")
+                digits = "".join(ch for ch in parts[0] if ch.isdigit())
+                if digits:
+                    try:
+                        current_sem_num = int(digits)
+                    except ValueError:
+                        current_sem_num = None
 
         console.print(f"[bold]📊 Aktuelles Semester:[/bold] {current_sem}")
         console.print(f"[bold]Notendurchschnitt:[/bold] {grade_data.get('grade', '-')}")
@@ -1800,13 +1802,16 @@ def show_comprehensive_exams(
 
         # Categorize modules
         angemeldet = [m for m in modules if m.get("examStatus") == "angemeldet"]
+        bestanden = [m for m in modules if m.get("examStatus") == "bestanden"]
+        anerkannt = [m for m in modules if m.get("examStatus") == "anerkannt"]
+        nicht_bestanden = [m for m in modules if m.get("examStatus") == "nicht bestanden"]
         offen = [
             m for m in modules
             if m.get("examStatus") is None and m.get("pruefungsform") != "Anerkennung"
         ]
 
         # Filter open modules to current semester range if not explicitly set
-        if not semester and display_semester:
+        if not semester and display_semester and not include_completed:
             offen = [m for m in offen if m.get("semester", 0) <= display_semester]
 
         # Show registered exams with dates
@@ -1930,6 +1935,53 @@ def show_comprehensive_exams(
                     )
                 console.print()
 
+        # Show completed and failed modules if requested
+        if include_completed:
+            if bestanden or anerkannt:
+                console.print("\n")
+                table = Table(
+                    title="✓ ABGESCHLOSSENE MODULE",
+                    title_style="bold green",
+                    border_style="green",
+                )
+                table.add_column("Modul", style="bold", max_width=40)
+                table.add_column("Sem.", justify="center", width=5)
+                table.add_column("Prüfungsform", style="cyan", max_width=15)
+                table.add_column("Note", justify="right", width=5)
+                table.add_column("ECTS", justify="right", width=5)
+
+                for m in sorted(bestanden + anerkannt, key=lambda x: x.get("semester", 99)):
+                    status_marker = "anerkannt" if m in anerkannt else "bestanden"
+                    table.add_row(
+                        m.get("modulbezeichnung", "?")[:40],
+                        str(m.get("semester", "?")),
+                        m.get("pruefungsform", "?")[:15],
+                        str(m.get("note") or "anerkannt"),
+                        str(m.get("eCTS", 0)),
+                    )
+                console.print(table)
+
+            if nicht_bestanden:
+                console.print("\n")
+                table = Table(
+                    title="⚠️ NICHT BESTANDEN (Wiederholung nötig)",
+                    title_style="bold yellow",
+                    border_style="yellow",
+                )
+                table.add_column("Modul", style="bold", max_width=40)
+                table.add_column("Sem.", justify="center", width=5)
+                table.add_column("Prüfungsform", style="cyan", max_width=15)
+                table.add_column("ECTS", justify="right", width=5)
+
+                for m in sorted(nicht_bestanden, key=lambda x: x.get("semester", 99)):
+                    table.add_row(
+                        m.get("modulbezeichnung", "?")[:40],
+                        str(m.get("semester", "?")),
+                        m.get("pruefungsform", "?")[:15],
+                        str(m.get("eCTS", 0)),
+                    )
+                console.print(table)
+
     # Show calendar events with course links
     if calendar_events:
         console.print("\n")
@@ -1948,7 +2000,7 @@ def show_comprehensive_exams(
         console.print(table)
 
     # Show Moodle courses with links
-    if moodle_courses and len(moodle_courses) > 0:
+    if moodle_courses:
         console.print("\n")
         table = Table(title="🔗 MOODLE KURSE & MATERIALIEN")
         table.add_column("Kurs", style="bold", max_width=50)
@@ -1979,7 +2031,7 @@ def _get_requirements_for_pruefungsform(pruefungsform: str) -> str:
         "Lerntagebuch": "  • Regelmäßige Reflexion über Lernprozess\n  • Dokumentation in vorgegebenem Format\n  • Abgabe über Moodle",
         "Präsentation": "  • Vorbereitung einer Präsentation (10-20 Min.)\n  • Handout oder Folien\n  • Präsentation vor Kurs/Dozent",
         "Seminararbeit": "  • Schriftliche Ausarbeitung (10-15 Seiten)\n  • Wissenschaftliche Zitierweise\n  • Abgabe als PDF über Moodle",
-        "E-Portfolio ": "  • Digitale Sammlung von Lernartefakten\n  • Reflexion über Lernfortschritt\n  • Online-Präsentation",
+        "E-Portfolio": "  • Digitale Sammlung von Lernartefakten\n  • Reflexion über Lernfortschritt\n  • Online-Präsentation",
         "Mündliche Prüfung": "  • Terminvereinbarung mit Prüfer\n  • Vorbereitung auf Prüfungsgespräch\n  • Ca. 20-30 Minuten",
         "Anerkennung": "  • Nachweis über Praxisphase\n  • Bestätigung vom Arbeitgeber\n  • Einreichung über Studierendensekretariat",
         "Exposé": "  • Forschungsplan für Abschlussarbeit\n  • 3-5 Seiten\n  • Einreichung beim Betreuer",
