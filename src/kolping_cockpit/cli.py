@@ -470,13 +470,32 @@ def login_manual() -> None:
 
     Use this in Codespaces or SSH sessions where no GUI is available.
     You'll need to login via browser elsewhere and paste the session cookie.
+    
+    Priority: Uses KOLPING_* environment variables if available (repo secrets).
     """
-    from kolping_cockpit.settings import get_settings, store_secret
+    from kolping_cockpit.settings import get_secret_from_env_or_keyring, get_settings, store_secret
 
     settings = get_settings()
 
     console.print("[bold cyan]Kolping Study Cockpit - Manual Login[/bold cyan]")
     console.print("=" * 50)
+    console.print()
+    
+    # Check if we already have credentials from environment/repo secrets
+    existing_moodle = get_secret_from_env_or_keyring("moodle_session")
+    existing_graphql = get_secret_from_env_or_keyring("graphql_bearer_token")
+    
+    if existing_moodle:
+        console.print("[green]✓ Moodle session found in environment/repo secrets[/green]")
+    if existing_graphql:
+        console.print("[green]✓ GraphQL token found in environment/repo secrets[/green]")
+    
+    if existing_moodle and existing_graphql:
+        console.print()
+        console.print("[bold green]All credentials already configured from secrets![/bold green]")
+        console.print("Use 'kolping status' to verify connection.")
+        return
+    
     console.print()
     console.print("[yellow]Instructions:[/yellow]")
     console.print("1. Open in your local browser:")
@@ -489,14 +508,17 @@ def login_manual() -> None:
     console.print("   → Copy the value of 'MoodleSession'")
     console.print()
 
-    moodle_session = typer.prompt("Paste MoodleSession cookie value")
+    if not existing_moodle:
+        moodle_session = typer.prompt("Paste MoodleSession cookie value")
 
-    if moodle_session:
-        store_secret("moodle_session", moodle_session.strip())
-        console.print("[green]✓ Session stored successfully![/green]")
+        if moodle_session:
+            store_secret("moodle_session", moodle_session.strip())
+            console.print("[green]✓ Session stored successfully![/green]")
+        else:
+            console.print("[red]✗ No session provided[/red]")
+            raise typer.Exit(code=1)
     else:
-        console.print("[red]✗ No session provided[/red]")
-        raise typer.Exit(code=1)
+        console.print("[dim]Skipping - already configured from secrets[/dim]")
 
     # Optional: Also ask for GraphQL bearer token
     console.print()
@@ -507,20 +529,23 @@ def login_manual() -> None:
     console.print("3. Look for GraphQL requests and copy the Authorization header")
     console.print()
 
-    bearer_token = typer.prompt(
-        "Paste Bearer token (or press Enter to skip)", default="", show_default=False
-    )
+    if not existing_graphql:
+        bearer_token = typer.prompt(
+            "Paste Bearer token (or press Enter to skip)", default="", show_default=False
+        )
 
-    if bearer_token:
-        # Remove "Bearer " prefix if included
-        token = bearer_token.strip()
-        if token.lower().startswith("bearer "):
-            token = token[7:]
-        success = store_secret("graphql_bearer_token", token)
-        if success:
-            console.print("[green]✓ GraphQL token stored![/green]")
-        else:
-            console.print("[red]✗ Failed to store GraphQL token![/red]")
+        if bearer_token:
+            # Remove "Bearer " prefix if included
+            token = bearer_token.strip()
+            if token.lower().startswith("bearer "):
+                token = token[7:]
+            success = store_secret("graphql_bearer_token", token)
+            if success:
+                console.print("[green]✓ GraphQL token stored![/green]")
+            else:
+                console.print("[red]✗ Failed to store GraphQL token![/red]")
+    else:
+        console.print("[dim]Skipping - already configured from secrets[/dim]")
 
 
 @app.command("set-moodle")
@@ -1458,22 +1483,47 @@ def get_graphql_token_auto(
         "-t",
         help="Timeout in seconds for login completion",
     ),
+    moodle_also: bool = typer.Option(
+        True,
+        "--moodle/--no-moodle",
+        help="Also capture Moodle session cookie",
+    ),
 ) -> None:
     """
-    Automatically extract GraphQL Bearer token via browser.
+    Automatically extract GraphQL Bearer token and Moodle session via browser.
 
-    Opens a browser, logs into cms.kolping-hochschule.de, and captures
-    the Bearer token from network requests.
+    Opens a browser, logs into cms.kolping-hochschule.de and Moodle,
+    and captures both the Bearer token and Moodle session cookie.
 
-    The token is required for accessing the "Mein Studium" GraphQL API.
+    Priority: Uses KOLPING_* environment variables if already set (repo secrets).
     """
-    from kolping_cockpit.settings import store_secret
+    from kolping_cockpit.settings import get_secret_from_env_or_keyring, store_secret
 
-    console.print("[bold cyan]🔑 GraphQL Token Extraktion[/bold cyan]")
+    console.print("[bold cyan]🔑 Automatic Token & Session Extraction[/bold cyan]")
     console.print("=" * 50)
     console.print()
+    
+    # Check for existing credentials from environment
+    existing_graphql = get_secret_from_env_or_keyring("graphql_bearer_token")
+    existing_moodle = get_secret_from_env_or_keyring("moodle_session")
+    
+    if existing_graphql:
+        console.print("[green]✓ GraphQL token already configured from environment/secrets[/green]")
+    if existing_moodle:
+        console.print("[green]✓ Moodle session already configured from environment/secrets[/green]")
+    
+    if existing_graphql and existing_moodle:
+        console.print()
+        console.print("[bold green]All credentials already configured from secrets![/bold green]")
+        console.print("Use 'kolping status' to verify connection.")
+        console.print()
+        console.print("[dim]To force re-extraction, unset environment variables:[/dim]")
+        console.print("[dim]  unset KOLPING_GRAPHQL_BEARER_TOKEN[/dim]")
+        console.print("[dim]  unset KOLPING_MOODLE_SESSION[/dim]")
+        return
+    
     console.print("Dieser Befehl öffnet einen Browser und loggt automatisch ein.")
-    console.print("Nach erfolgreicher Anmeldung wird der GraphQL Token extrahiert.")
+    console.print("Nach erfolgreicher Anmeldung werden Tokens extrahiert.")
     console.print()
 
     try:
@@ -1484,6 +1534,7 @@ def get_graphql_token_auto(
         raise typer.Exit(code=1)
 
     captured_token: str | None = None
+    captured_moodle_session: str | None = None
     target_audience = "api://b3d6dbac-7f13-4032-9e12-c0aae5910e20"
 
     def handle_request(request):
@@ -1512,7 +1563,7 @@ def get_graphql_token_auto(
                     aud = payload.get("aud", "")
                     if aud == target_audience:
                         captured_token = token
-                        console.print("[green]✓ Token mit korrekter Audience gefunden![/green]")
+                        console.print("[green]✓ GraphQL token mit korrekter Audience gefunden![/green]")
                         console.print(f"  [dim]aud: {aud}[/dim]")
             except Exception:
                 pass  # Ignore decode errors
@@ -1559,23 +1610,69 @@ def get_graphql_token_auto(
 
                 time.sleep(1)
 
-            if captured_token:
+            # Try to capture Moodle session if requested
+            if moodle_also and not existing_moodle:
+                console.print()
+                console.print("[yellow]Erfasse Moodle Session...[/yellow]")
+                try:
+                    # Navigate to Moodle
+                    moodle_url = "https://portal.kolping-hochschule.de/my/"
+                    page.goto(moodle_url, timeout=30000)
+                    time.sleep(5)  # Wait for login redirect if needed
+                    
+                    # Get cookies
+                    cookies = context.cookies()
+                    for cookie in cookies:
+                        if cookie['name'] == 'MoodleSession':
+                            captured_moodle_session = cookie['value']
+                            console.print("[green]✓ Moodle session cookie gefunden![/green]")
+                            break
+                except Exception as e:
+                    console.print(f"[yellow]⚠ Konnte Moodle session nicht erfassen: {e}[/yellow]")
+
+            # Store captured credentials
+            success_count = 0
+            
+            if captured_token and not existing_graphql:
                 # Store the token
                 success = store_secret("graphql_bearer_token", captured_token)
                 if success:
                     console.print()
                     console.print(
-                        "[bold green]✓ Token erfolgreich extrahiert und gespeichert![/bold green]"
+                        "[bold green]✓ GraphQL token erfolgreich extrahiert und gespeichert![/bold green]"
                     )
                     console.print()
                     # Show token preview
                     console.print(
                         f"[dim]Token (gekürzt): {captured_token[:50]}...{captured_token[-20:]}[/dim]"
                     )
+                    success_count += 1
                 else:
-                    console.print("[red]✗ Konnte Token nicht speichern[/red]")
+                    console.print("[red]✗ Konnte GraphQL token nicht speichern[/red]")
+            
+            if captured_moodle_session and not existing_moodle:
+                success = store_secret("moodle_session", captured_moodle_session)
+                if success:
+                    console.print()
+                    console.print("[bold green]✓ Moodle session erfolgreich gespeichert![/bold green]")
+                    success_count += 1
+                else:
+                    console.print("[red]✗ Konnte Moodle session nicht speichern[/red]")
+            
+            if success_count == 0:
+                if not captured_token and not existing_graphql:
+                    error_msg = "Kein GraphQL Token erfasst"
+                    console.print()
+                    console.print(f"[red]✗ {error_msg}[/red]")
+                    console.print()
+                    console.print("[yellow]Tipps:[/yellow]")
+                    console.print("• Stelle sicher, dass du eingeloggt bist")
+                    console.print("• Navigiere zu 'Mein Studium'")
+                    console.print("• Refreshe die Seite um GraphQL Requests zu triggern")
                     raise typer.Exit(code=1)
-            else:
+                elif existing_graphql or existing_moodle:
+                    console.print()
+                    console.print("[green]✓ Credentials bereits vorhanden (aus Secrets)[/green]")
                 console.print()
                 console.print("[red]✗ Kein Token gefunden![/red]")
                 console.print()
