@@ -24,19 +24,15 @@ class DashboardViewModel(
         viewModelScope.launch {
             _uiState.value = DashboardUiState.Loading
             
-            try {
-                val gradeResult = repository.getGradeOverview()
-                val moodleResult = repository.getMoodleDashboard()
-                val deadlinesResult = repository.getUpcomingDeadlines()
-                
-                _uiState.value = DashboardUiState.Success(
-                    gradeOverview = gradeResult.getOrNull(),
-                    moodleDashboard = moodleResult.getOrNull(),
-                    upcomingDeadlines = deadlinesResult.getOrNull() ?: emptyList()
-                )
-            } catch (e: Exception) {
-                _uiState.value = DashboardUiState.Error(e.message ?: "Unknown error")
-            }
+            val gradeResult = repository.getGradeOverview()
+            val moodleResult = repository.getMoodleDashboard()
+            val deadlinesResult = repository.getUpcomingDeadlines()
+            
+            _uiState.value = DashboardUiState.Success(
+                gradeOverview = gradeResult.getOrNull(),
+                moodleDashboard = moodleResult.getOrNull(),
+                upcomingDeadlines = deadlinesResult.getOrNull() ?: emptyList()
+            )
         }
     }
     

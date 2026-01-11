@@ -32,12 +32,19 @@ class TokenManager(private val dataStore: DataStore<Preferences>) {
         preferences[BEARER_TOKEN_KEY] != null && preferences[SESSION_COOKIE_KEY] != null
     }
     
-    // Synchronous getters for DI initialization
-    fun getBearerToken(): String? = runBlocking {
+    /**
+     * Get bearer token synchronously.
+     * Should only be called from background threads or coroutines.
+     */
+    fun getBearerTokenSync(): String? = runBlocking {
         bearerTokenFlow.first()
     }
     
-    fun getSessionCookie(): String? = runBlocking {
+    /**
+     * Get session cookie synchronously.
+     * Should only be called from background threads or coroutines.
+     */
+    fun getSessionCookieSync(): String? = runBlocking {
         sessionCookieFlow.first()
     }
     

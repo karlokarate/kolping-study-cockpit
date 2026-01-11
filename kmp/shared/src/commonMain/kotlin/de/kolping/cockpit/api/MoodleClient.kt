@@ -51,8 +51,15 @@ class MoodleClient(
                         }
                     }
                     
-                    override suspend fun addCookie(requestUrl: Url, cookie: Cookie) {}
-                    override fun close() {}
+                    // No-op implementations: we manually set the session cookie
+                    // and don't need to persist cookies from server responses
+                    override suspend fun addCookie(requestUrl: Url, cookie: Cookie) {
+                        // Intentionally empty - session cookie is pre-configured
+                    }
+                    
+                    override fun close() {
+                        // Intentionally empty - no resources to clean up
+                    }
                 }
             }
         }

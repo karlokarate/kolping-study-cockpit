@@ -24,19 +24,15 @@ class CoursesViewModel(
         viewModelScope.launch {
             _uiState.value = CoursesUiState.Loading
             
-            try {
-                val result = repository.getMoodleCourses()
-                result.fold(
-                    onSuccess = { courses ->
-                        _uiState.value = CoursesUiState.Success(courses)
-                    },
-                    onFailure = { exception ->
-                        _uiState.value = CoursesUiState.Error(exception.message ?: "Unknown error")
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.value = CoursesUiState.Error(e.message ?: "Unknown error")
-            }
+            val result = repository.getMoodleCourses()
+            result.fold(
+                onSuccess = { courses ->
+                    _uiState.value = CoursesUiState.Success(courses)
+                },
+                onFailure = { exception ->
+                    _uiState.value = CoursesUiState.Error(exception.message ?: "Unknown error")
+                }
+            )
         }
     }
     

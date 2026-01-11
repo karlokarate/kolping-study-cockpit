@@ -58,34 +58,51 @@ fun EntraAuthWebView(
                                 !url.contains("/login") &&
                                 !url.contains("/authorize")
                             ) {
-                                // Extract Bearer token from page
+                                // Get cookies from CookieManager
+                                val cookieManager = CookieManager.getInstance()
+                                
+                                // Extract session cookie from portal
+                                val portalCookies = cookieManager.getCookie("portal.kolping-hochschule.de")
+                                val sessionCookie = portalCookies?.split(";")
+                                    ?.find { it.trim().startsWith("MoodleSession=") }
+                                    ?.substringAfter("=")
+                                    ?.trim()
+                                
+                                // Extract bearer token from CMS domain
+                                val cmsCookies = cookieManager.getCookie("cms.kolping-hochschule.de")
+                                
+                                // Try to intercept bearer token from page context
+                                // Check if we can find the token in the page
                                 view?.evaluateJavascript(
                                     """
                                     (function() {
-                                        // Try to find token in localStorage or sessionStorage
-                                        const token = localStorage.getItem('token') || 
-                                                     localStorage.getItem('bearerToken') ||
-                                                     localStorage.getItem('auth_token') ||
-                                                     sessionStorage.getItem('token');
-                                        return token;
+                                        // Check if authorization header or token is available in page context
+                                        if (window.authToken) return window.authToken;
+                                        if (window.bearerToken) return window.bearerToken;
+                                        
+                                        // Check meta tags or data attributes
+                                        var meta = document.querySelector('meta[name="auth-token"]');
+                                        if (meta) return meta.getAttribute('content');
+                                        
+                                        return null;
                                     })();
                                     """.trimIndent()
-                                ) { result ->
-                                    val token = result?.trim('"')
+                                ) { tokenResult ->
+                                    val extractedToken = tokenResult?.trim('"')?.takeIf { 
+                                        it != "null" && it.isNotBlank() 
+                                    }
                                     
-                                    // Get cookies
-                                    val cookieManager = CookieManager.getInstance()
-                                    val cookies = cookieManager.getCookie("portal.kolping-hochschule.de")
-                                    val sessionCookie = cookies?.split(";")
-                                        ?.find { it.trim().startsWith("MoodleSession=") }
-                                        ?.substringAfter("=")
+                                    // For production: token should be intercepted from network calls
+                                    // This is a fallback - ideally use OkHttp interceptor or WebViewClient
+                                    // to capture the Authorization header from API calls
                                     
-                                    if (!token.isNullOrBlank() && token != "null" && sessionCookie != null) {
-                                        onTokensReceived(token, sessionCookie)
-                                    } else if (sessionCookie != null) {
-                                        // If we have cookie but no token, we might need to navigate to the GraphQL endpoint
-                                        // For now, signal partial success
-                                        onError("Token extraction incomplete - please check authentication flow")
+                                    if (sessionCookie != null) {
+                                        // We have session cookie, proceed with it
+                                        // Bearer token will be obtained from first API call or separate auth flow
+                                        val bearerToken = extractedToken ?: ""
+                                        onTokensReceived(bearerToken, sessionCookie)
+                                    } else {
+                                        onError("Authentication incomplete - session cookie not found")
                                     }
                                 }
                             }

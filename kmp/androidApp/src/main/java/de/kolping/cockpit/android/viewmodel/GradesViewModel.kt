@@ -24,19 +24,15 @@ class GradesViewModel(
         viewModelScope.launch {
             _uiState.value = GradesUiState.Loading
             
-            try {
-                val result = repository.getGradeOverview()
-                result.fold(
-                    onSuccess = { gradeOverview ->
-                        _uiState.value = GradesUiState.Success(gradeOverview)
-                    },
-                    onFailure = { exception ->
-                        _uiState.value = GradesUiState.Error(exception.message ?: "Unknown error")
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.value = GradesUiState.Error(e.message ?: "Unknown error")
-            }
+            val result = repository.getGradeOverview()
+            result.fold(
+                onSuccess = { gradeOverview ->
+                    _uiState.value = GradesUiState.Success(gradeOverview)
+                },
+                onFailure = { exception ->
+                    _uiState.value = GradesUiState.Error(exception.message ?: "Unknown error")
+                }
+            )
         }
     }
     

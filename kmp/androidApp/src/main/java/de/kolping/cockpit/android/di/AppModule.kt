@@ -25,19 +25,32 @@ val appModule = module {
     // Token Manager
     single { TokenManager(get()) }
     
-    // API Clients (created lazily based on stored tokens)
-    factory { 
+    // API Clients (singletons that get tokens from Flow)
+    single { 
         val tokenManager: TokenManager = get()
-        GraphQLClient(bearerToken = tokenManager.getBearerToken())
+        // Client will be recreated when tokens change via ViewModel
+        GraphQLClient(bearerToken = null) // Token injected later via flow
     }
     
-    factory { 
+    single { 
         val tokenManager: TokenManager = get()
-        MoodleClient(sessionCookie = tokenManager.getSessionCookie())
+        // Client will be recreated when tokens change via ViewModel
+        MoodleClient(sessionCookie = null) // Cookie injected later via flow
     }
     
-    // Repository
-    factory { StudyRepository(get(), get()) }
+    // Repository - factory to allow recreation with fresh clients
+    factory { 
+        val tokenManager: TokenManager = get()
+        // Get current tokens synchronously for client creation
+        // This is acceptable as it's called in background thread via ViewModels
+        val bearerToken = tokenManager.getBearerTokenSync()
+        val sessionCookie = tokenManager.getSessionCookieSync()
+        
+        StudyRepository(
+            GraphQLClient(bearerToken),
+            MoodleClient(sessionCookie)
+        )
+    }
     
     // ViewModels
     viewModel { LoginViewModel(get()) }

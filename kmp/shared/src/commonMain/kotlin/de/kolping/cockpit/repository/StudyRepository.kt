@@ -11,7 +11,7 @@ import de.kolping.cockpit.models.*
 class StudyRepository(
     private val graphQLClient: GraphQLClient,
     private val moodleClient: MoodleClient
-) {
+) : AutoCloseable {
     
     /**
      * Check if authenticated with both services
@@ -78,7 +78,10 @@ class StudyRepository(
         )
     }
     
-    fun close() {
+    /**
+     * Close all HTTP clients to prevent resource leaks
+     */
+    override fun close() {
         graphQLClient.close()
         moodleClient.close()
     }

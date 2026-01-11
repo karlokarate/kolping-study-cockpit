@@ -111,7 +111,7 @@ class GraphQLClient(
                     grade
                     eCTS
                     student {
-                        studentId
+                        studentId: id
                         geschlechtTnid
                         titel
                         akademischerGradTnid
