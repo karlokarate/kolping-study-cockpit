@@ -169,16 +169,19 @@ class KolpingGraphQLClient:
             query { myStudentGradeOverview { grade eCTS currentSemester } }
         """,
         "moduls": """
-            query { moduls { id modulName modulkuerzel ectspunkte } }
+            query { moduls { id modulName modulkuerzel ectspunkte semester pruefungsform beschreibung } }
         """,
         "semesters": """
             query { semesters { id semesterName semesterPeriode } }
         """,
         "pruefungs": """
-            query { pruefungs { id modulId datum } }
+            query { pruefungs { id modulId datum uhrzeit raum pruefungsform anmerkung } }
         """,
         "studiengangs": """
             query { studiengangs { id kuerzel bezeichnung } }
+        """,
+        "matchModulStudent": """
+            query { matchModulStudent { modulId studentId status anmeldedatum } }
         """,
     }
 
