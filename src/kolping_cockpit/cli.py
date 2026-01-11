@@ -2,7 +2,12 @@
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
+
+# Constants for display formatting
+MODULE_NAME_MAX_LENGTH = 50
+COURSE_NAME_MATCH_LENGTH = 20
 
 app = typer.Typer(
     name="kolping",
@@ -1625,7 +1630,6 @@ def show_comprehensive_exams(
         kolping exams --semester 3
         kolping exams --analyze
     """
-    from rich.panel import Panel
 
     console.print("[bold cyan]📚 Kolping Study Cockpit - Prüfungstermine & Leistungsübersicht[/bold cyan]")
     console.print("=" * 70)
@@ -1883,8 +1887,12 @@ def show_comprehensive_exams(
                 if moodle_courses:
                     # Simple fuzzy match on course name
                     matching_course = next(
-                        (c for c in moodle_courses if modul_name[:20].lower() in c.name.lower()),
-                        None
+                        (
+                            c
+                            for c in moodle_courses
+                            if modul_name[:COURSE_NAME_MATCH_LENGTH].lower() in c.name.lower()
+                        ),
+                        None,
                     )
                     if matching_course:
                         moodle_link = "✓ Verfügbar"
@@ -1916,7 +1924,10 @@ def show_comprehensive_exams(
                 console.print(f"[bold cyan]{pform}[/bold cyan] ({count} Module, {ects_sum} ECTS)")
                 console.print(f"[dim]{requirements}[/dim]")
                 for mod in modules_list:
-                    console.print(f"  • {mod.get('modulbezeichnung', '?')[:50]} (Sem. {mod.get('semester', '?')})")
+                    console.print(
+                        f"  • {mod.get('modulbezeichnung', '?')[:MODULE_NAME_MAX_LENGTH]} "
+                        f"(Sem. {mod.get('semester', '?')})"
+                    )
                 console.print()
 
     # Show calendar events with course links
