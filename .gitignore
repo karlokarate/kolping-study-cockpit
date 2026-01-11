@@ -136,6 +136,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
 .envrc
 .venv
 env/
@@ -205,3 +206,13 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Playwright and browser automation
+playwright/.auth/
+*.har
+*.zip
+*.trace.zip
+cookies*
+
+# Export data
+exports/
