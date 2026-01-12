@@ -80,8 +80,7 @@ class FileStorageManager(private val context: Context) {
      * Save file to module files directory
      * @return File object pointing to the saved file
      */
-    fun saveModuleFile(moduleId: String?, fileName: String, inputStream: InputStream): File {
-        requireNotNull(moduleId) { "Module ID cannot be null" }
+    fun saveModuleFile(moduleId: String, fileName: String, inputStream: InputStream): File {
         val targetFile = File(getModuleFilesDirectory(moduleId), fileName)
         targetFile.outputStream().use { outputStream ->
             inputStream.copyTo(outputStream)
@@ -117,10 +116,8 @@ class FileStorageManager(private val context: Context) {
     /**
      * Delete all files in module directory
      */
-    fun deleteModuleFiles(moduleId: String?) {
-        if (moduleId != null) {
-            getModuleDirectory(moduleId).deleteRecursively()
-        }
+    fun deleteModuleFiles(moduleId: String) {
+        getModuleDirectory(moduleId).deleteRecursively()
     }
     
     /**
@@ -165,8 +162,12 @@ class FileStorageManager(private val context: Context) {
      * @param filePath Relative path within sync directory
      */
     fun fileExists(filePath: String): Boolean {
-        val file = File(syncDir, filePath)
-        return file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)
+        return try {
+            val file = File(syncDir, filePath)
+            file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)
+        } catch (e: Exception) {
+            false
+        }
     }
     
     /**
@@ -174,10 +175,14 @@ class FileStorageManager(private val context: Context) {
      * @param filePath Relative path within sync directory
      */
     fun getFile(filePath: String): File? {
-        val file = File(syncDir, filePath)
-        return if (file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)) {
-            file
-        } else {
+        return try {
+            val file = File(syncDir, filePath)
+            if (file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)) {
+                file
+            } else {
+                null
+            }
+        } catch (e: Exception) {
             null
         }
     }
