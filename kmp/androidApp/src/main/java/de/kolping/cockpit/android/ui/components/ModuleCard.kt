@@ -103,22 +103,15 @@ fun ModuleCard(
             
             // Exam status if available
             module.examStatus?.let { status ->
+                val statusColors = getExamStatusColors(status.lowercase())
                 Surface(
-                    color = when (status.lowercase()) {
-                        "bestanden", "passed" -> Color(0xFF4CAF50).copy(alpha = 0.1f)
-                        "nicht bestanden", "failed" -> Color(0xFFF44336).copy(alpha = 0.1f)
-                        else -> MaterialTheme.colorScheme.surface
-                    },
+                    color = statusColors.backgroundColor,
                     shape = MaterialTheme.shapes.extraSmall
                 ) {
                     Text(
                         text = status,
                         style = MaterialTheme.typography.labelSmall,
-                        color = when (status.lowercase()) {
-                            "bestanden", "passed" -> Color(0xFF4CAF50)
-                            "nicht bestanden", "failed" -> Color(0xFFF44336)
-                            else -> MaterialTheme.colorScheme.onSurface
-                        },
+                        color = statusColors.textColor,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -126,3 +119,29 @@ fun ModuleCard(
         }
     }
 }
+
+/**
+ * Get appropriate colors for exam status
+ */
+@Composable
+private fun getExamStatusColors(status: String): StatusColors {
+    return when (status) {
+        "bestanden", "passed" -> StatusColors(
+            backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            textColor = MaterialTheme.colorScheme.primary
+        )
+        "nicht bestanden", "failed" -> StatusColors(
+            backgroundColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+            textColor = MaterialTheme.colorScheme.error
+        )
+        else -> StatusColors(
+            backgroundColor = MaterialTheme.colorScheme.surface,
+            textColor = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+private data class StatusColors(
+    val backgroundColor: Color,
+    val textColor: Color
+)

@@ -27,6 +27,8 @@ class HomeViewModel(
     
     companion object {
         private const val TAG = "HomeViewModel"
+        private const val NEVER_SYNCED = 0L
+        private const val UPCOMING_EVENTS_LIMIT = 3
     }
     
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Loading)
@@ -52,14 +54,21 @@ class HomeViewModel(
                 combine(
                     offlineRepository.getCurrentSemesterModules(),
                     offlineRepository.getStudentProfile(),
-                    offlineRepository.getUpcomingEvents(limit = 3)
+                    offlineRepository.getUpcomingEvents(limit = UPCOMING_EVENTS_LIMIT)
                 ) { modules, profile, events ->
                     Triple(modules, profile, events)
                 }.collect { (modules, profile, events) ->
-                    val lastSync = profile?.lastSync ?: 0L
+                    // Filter modules by current semester if profile exists
+                    val currentSemesterModules = if (profile?.currentSemester != null) {
+                        modules.filter { it.semester == profile.currentSemester }
+                    } else {
+                        modules
+                    }
+                    
+                    val lastSync = profile?.lastSync ?: NEVER_SYNCED
                     _uiState.value = HomeUiState.Success(
                         studentProfile = profile,
-                        currentSemesterModules = modules,
+                        currentSemesterModules = currentSemesterModules,
                         upcomingEvents = events,
                         lastSyncTimestamp = lastSync
                     )
@@ -134,7 +143,7 @@ class HomeViewModel(
      * Format timestamp to human-readable string
      */
     fun formatLastSync(timestamp: Long): String {
-        if (timestamp == 0L) return "Noch nie synchronisiert"
+        if (timestamp == NEVER_SYNCED) return "Noch nie synchronisiert"
         
         val now = System.currentTimeMillis()
         val diff = now - timestamp

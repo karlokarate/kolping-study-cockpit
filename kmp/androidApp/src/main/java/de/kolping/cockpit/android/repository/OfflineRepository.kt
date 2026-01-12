@@ -150,8 +150,10 @@ class OfflineRepository(
     }
     
     /**
-     * Get modules for current semester (highest semester number)
-     * Returns Flow for reactive updates
+     * Get modules for current semester
+     * Returns all modules sorted by semester (most recent first)
+     * Note: Filtering by specific semester should be done in the UI layer
+     * based on StudentProfile.currentSemester
      */
     fun getCurrentSemesterModules(): Flow<List<ModuleEntity>> {
         return moduleDao.getAllModules()
