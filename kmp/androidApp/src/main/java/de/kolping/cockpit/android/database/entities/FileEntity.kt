@@ -25,4 +25,10 @@ data class FileEntity(
     val fileType: String,  // pdf, doc, etc.
     val sizeBytes: Long,
     val downloadedAt: Long
-)
+) {
+    init {
+        require(moduleId != null || courseId != null) {
+            "FileEntity must have at least one of moduleId or courseId set"
+        }
+    }
+}

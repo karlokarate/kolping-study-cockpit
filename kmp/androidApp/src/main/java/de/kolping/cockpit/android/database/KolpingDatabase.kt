@@ -20,7 +20,7 @@ import de.kolping.cockpit.android.database.entities.*
         StudentProfileEntity::class
     ],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class KolpingDatabase : RoomDatabase() {
     abstract fun moduleDao(): ModuleDao
@@ -42,6 +42,12 @@ abstract class KolpingDatabase : RoomDatabase() {
                     KolpingDatabase::class.java,
                     DATABASE_NAME
                 )
+                    // NOTE: Using fallbackToDestructiveMigration() will delete all local data
+                    // whenever the database schema version changes without a proper migration.
+                    // This is currently acceptable because the offline database is treated as
+                    // a cache/sync target for remote study data during early development.
+                    // TODO(kolping-cockpit): Replace this with explicit Room migrations once
+                    // the schema has stabilized for production releases to preserve user data.
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
