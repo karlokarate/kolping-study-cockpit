@@ -6,7 +6,6 @@ import androidx.lifecycle.viewModelScope
 import de.kolping.cockpit.android.database.entities.CalendarEventEntity
 import de.kolping.cockpit.android.repository.OfflineRepository
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -23,9 +22,6 @@ class CalendarViewModel(
         private const val TAG = "CalendarViewModel"
     }
     
-    private val _uiState = MutableStateFlow<CalendarUiState>(CalendarUiState.Loading)
-    val uiState: StateFlow<CalendarUiState> = _uiState.asStateFlow()
-    
     private val _selectedDate = MutableStateFlow<Date>(Date())
     val selectedDate: StateFlow<Date> = _selectedDate.asStateFlow()
     
@@ -35,45 +31,46 @@ class CalendarViewModel(
     private val _filterEventType = MutableStateFlow<String?>(null)
     val filterEventType: StateFlow<String?> = _filterEventType.asStateFlow()
     
-    init {
-        loadEvents()
-    }
-    
     /**
-     * Load calendar events from offline database
+     * UI state using combine to properly manage Flow lifecycle and apply filters
      */
-    private fun loadEvents() {
-        viewModelScope.launch {
-            try {
-                _uiState.value = CalendarUiState.Loading
-                
-                offlineRepository.getAllEvents().collect { events ->
-                    val filteredEvents = applyFilters(events)
-                    
-                    _uiState.value = CalendarUiState.Success(
-                        allEvents = filteredEvents,
-                        selectedDayEvents = getEventsForSelectedDay(filteredEvents)
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load calendar events", e)
-                _uiState.value = CalendarUiState.Error("Fehler beim Laden: ${e.message}")
+    val uiState: StateFlow<CalendarUiState> = combine(
+        offlineRepository.getAllEvents(),
+        _selectedDate,
+        _filterCourseId,
+        _filterEventType
+    ) { events, selectedDate, courseId, eventType ->
+        try {
+            // Apply filters
+            var filteredEvents = events
+            
+            courseId?.let { id ->
+                filteredEvents = filteredEvents.filter { it.courseId == id }
             }
+            
+            eventType?.let { type ->
+                filteredEvents = filteredEvents.filter { it.eventtype == type }
+            }
+            
+            CalendarUiState.Success(
+                allEvents = filteredEvents,
+                selectedDayEvents = getEventsForSelectedDay(filteredEvents, selectedDate)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to process calendar events", e)
+            CalendarUiState.Error("Fehler beim Laden der Kalenderereignisse: ${e.message}")
         }
-    }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = CalendarUiState.Loading
+    )
     
     /**
      * Select a date to view its events
      */
     fun selectDate(date: Date) {
         _selectedDate.value = date
-        
-        val currentState = _uiState.value
-        if (currentState is CalendarUiState.Success) {
-            _uiState.value = currentState.copy(
-                selectedDayEvents = getEventsForSelectedDay(currentState.allEvents)
-            )
-        }
     }
     
     /**
@@ -81,7 +78,6 @@ class CalendarViewModel(
      */
     fun filterByCourse(courseId: Int?) {
         _filterCourseId.value = courseId
-        loadEvents()
     }
     
     /**
@@ -89,7 +85,6 @@ class CalendarViewModel(
      */
     fun filterByEventType(eventType: String?) {
         _filterEventType.value = eventType
-        loadEvents()
     }
     
     /**
@@ -98,54 +93,29 @@ class CalendarViewModel(
     fun clearFilters() {
         _filterCourseId.value = null
         _filterEventType.value = null
-        loadEvents()
     }
     
     /**
-     * Refresh calendar data
+     * Get events for a specific day
      */
-    fun refresh() {
-        loadEvents()
-    }
-    
-    /**
-     * Apply active filters to events list
-     */
-    private fun applyFilters(events: List<CalendarEventEntity>): List<CalendarEventEntity> {
-        var filtered = events
-        
-        _filterCourseId.value?.let { courseId ->
-            filtered = filtered.filter { it.courseId == courseId }
-        }
-        
-        _filterEventType.value?.let { eventType ->
-            filtered = filtered.filter { it.eventtype == eventType }
-        }
-        
-        return filtered
-    }
-    
-    /**
-     * Get events for the currently selected day
-     */
-    private fun getEventsForSelectedDay(events: List<CalendarEventEntity>): List<CalendarEventEntity> {
-        val selectedCalendar = Calendar.getInstance().apply {
-            time = _selectedDate.value
-        }
-        
-        val startOfDay = selectedCalendar.apply {
+    private fun getEventsForSelectedDay(events: List<CalendarEventEntity>, selectedDate: Date): List<CalendarEventEntity> {
+        val startOfDayCalendar = Calendar.getInstance().apply {
+            time = selectedDate
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-        }.timeInMillis / 1000
-        
-        val endOfDay = selectedCalendar.apply {
+        }
+        val startOfDay = startOfDayCalendar.timeInMillis / 1000
+
+        val endOfDayCalendar = Calendar.getInstance().apply {
+            time = selectedDate
             set(Calendar.HOUR_OF_DAY, 23)
             set(Calendar.MINUTE, 59)
             set(Calendar.SECOND, 59)
             set(Calendar.MILLISECOND, 999)
-        }.timeInMillis / 1000
+        }
+        val endOfDay = endOfDayCalendar.timeInMillis / 1000
         
         return events.filter { event ->
             event.timestart in startOfDay..endOfDay
@@ -156,7 +126,7 @@ class CalendarViewModel(
      * Get events for a specific month
      */
     fun getEventsForMonth(year: Int, month: Int): List<CalendarEventEntity> {
-        val currentState = _uiState.value
+        val currentState = uiState.value
         if (currentState !is CalendarUiState.Success) return emptyList()
         
         val calendar = Calendar.getInstance().apply {
@@ -187,7 +157,7 @@ class CalendarViewModel(
      * Get all unique event types for filtering
      */
     fun getAvailableEventTypes(): List<String> {
-        val currentState = _uiState.value
+        val currentState = uiState.value
         if (currentState !is CalendarUiState.Success) return emptyList()
         
         return currentState.allEvents
@@ -200,7 +170,7 @@ class CalendarViewModel(
      * Get all unique courses for filtering
      */
     fun getAvailableCourses(): List<Pair<Int, String>> {
-        val currentState = _uiState.value
+        val currentState = uiState.value
         if (currentState !is CalendarUiState.Success) return emptyList()
         
         return currentState.allEvents

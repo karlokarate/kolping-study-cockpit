@@ -7,7 +7,6 @@ import de.kolping.cockpit.android.database.entities.FileEntity
 import de.kolping.cockpit.android.repository.OfflineRepository
 import de.kolping.cockpit.android.storage.FileStorageManager
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 
 /**
  * ViewModel for OfflineLibraryScreen
@@ -23,58 +22,43 @@ class OfflineLibraryViewModel(
         private const val TAG = "OfflineLibraryViewModel"
     }
     
-    private val _uiState = MutableStateFlow<OfflineLibraryUiState>(OfflineLibraryUiState.Loading)
-    val uiState: StateFlow<OfflineLibraryUiState> = _uiState.asStateFlow()
-    
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
     
     private val _sortOrder = MutableStateFlow(SortOrder.DATE_DESC)
     val sortOrder: StateFlow<SortOrder> = _sortOrder.asStateFlow()
     
-    init {
-        loadFiles()
-    }
-    
     /**
-     * Load all files from offline database
+     * UI state using combine to properly manage Flow lifecycle and apply search/sort
      */
-    private fun loadFiles() {
-        viewModelScope.launch {
-            try {
-                _uiState.value = OfflineLibraryUiState.Loading
-                
-                offlineRepository.getAllFiles().collect { files ->
-                    val filteredFiles = applySearchAndSort(files)
-                    val storageInfo = getStorageInfo(files)
-                    
-                    _uiState.value = OfflineLibraryUiState.Success(
-                        allFiles = filteredFiles,
-                        storageInfo = storageInfo
-                    )
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load files", e)
-                _uiState.value = OfflineLibraryUiState.Error("Fehler beim Laden: ${e.message}")
-            }
+    val uiState: StateFlow<OfflineLibraryUiState> = combine(
+        offlineRepository.getAllFiles(),
+        _searchQuery,
+        _sortOrder
+    ) { files, query, order ->
+        try {
+            val filteredFiles = applySearchAndSort(files, query, order)
+            val storageInfo = getStorageInfo(files)
+            
+            OfflineLibraryUiState.Success(
+                allFiles = filteredFiles,
+                storageInfo = storageInfo
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to process files", e)
+            OfflineLibraryUiState.Error("Fehler beim Laden der Offline-Bibliothek: ${e.message}")
         }
-    }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = OfflineLibraryUiState.Loading
+    )
     
     /**
      * Update search query
      */
     fun search(query: String) {
         _searchQuery.value = query
-        
-        val currentState = _uiState.value
-        if (currentState is OfflineLibraryUiState.Success) {
-            viewModelScope.launch {
-                offlineRepository.getAllFiles().collect { files ->
-                    val filteredFiles = applySearchAndSort(files)
-                    _uiState.value = currentState.copy(allFiles = filteredFiles)
-                }
-            }
-        }
     }
     
     /**
@@ -82,16 +66,6 @@ class OfflineLibraryViewModel(
      */
     fun setSortOrder(order: SortOrder) {
         _sortOrder.value = order
-        
-        val currentState = _uiState.value
-        if (currentState is OfflineLibraryUiState.Success) {
-            viewModelScope.launch {
-                offlineRepository.getAllFiles().collect { files ->
-                    val filteredFiles = applySearchAndSort(files)
-                    _uiState.value = currentState.copy(allFiles = filteredFiles)
-                }
-            }
-        }
     }
     
     /**
@@ -102,29 +76,22 @@ class OfflineLibraryViewModel(
     }
     
     /**
-     * Refresh file list
-     */
-    fun refresh() {
-        loadFiles()
-    }
-    
-    /**
      * Apply search filter and sorting to files list
      */
-    private fun applySearchAndSort(files: List<FileEntity>): List<FileEntity> {
+    private fun applySearchAndSort(files: List<FileEntity>, query: String, order: SortOrder): List<FileEntity> {
         var result = files
         
         // Apply search filter
-        val query = _searchQuery.value.trim()
-        if (query.isNotEmpty()) {
+        val trimmedQuery = query.trim()
+        if (trimmedQuery.isNotEmpty()) {
             result = result.filter { file ->
-                file.fileName.contains(query, ignoreCase = true) ||
-                file.fileType.contains(query, ignoreCase = true)
+                file.fileName.contains(trimmedQuery, ignoreCase = true) ||
+                file.fileType.contains(trimmedQuery, ignoreCase = true)
             }
         }
         
         // Apply sorting
-        result = when (_sortOrder.value) {
+        result = when (order) {
             SortOrder.NAME_ASC -> result.sortedBy { it.fileName.lowercase() }
             SortOrder.NAME_DESC -> result.sortedByDescending { it.fileName.lowercase() }
             SortOrder.DATE_ASC -> result.sortedBy { it.downloadedAt }
@@ -158,61 +125,6 @@ class OfflineLibraryViewModel(
             fileCount = fileCount,
             fileTypeBreakdown = fileTypeBreakdown
         )
-    }
-    
-    /**
-     * Format file size to human-readable string
-     */
-    fun formatFileSize(sizeBytes: Long): String {
-        val kb = 1024
-        val mb = kb * 1024
-        val gb = mb * 1024
-        
-        return when {
-            sizeBytes >= gb -> String.format("%.2f GB", sizeBytes.toDouble() / gb)
-            sizeBytes >= mb -> String.format("%.2f MB", sizeBytes.toDouble() / mb)
-            sizeBytes >= kb -> String.format("%.2f KB", sizeBytes.toDouble() / kb)
-            else -> "$sizeBytes Bytes"
-        }
-    }
-    
-    /**
-     * Format download date
-     */
-    fun formatDownloadDate(timestamp: Long): String {
-        val now = System.currentTimeMillis()
-        val diff = now - timestamp
-        
-        val minutes = diff / 60_000
-        val hours = diff / 3_600_000
-        val days = diff / 86_400_000
-        
-        return when {
-            minutes < 60 -> "vor $minutes Min."
-            hours < 24 -> "vor $hours Std."
-            days < 7 -> "vor $days Tag${if (days > 1) "en" else ""}"
-            else -> {
-                val sdf = java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.GERMAN)
-                sdf.format(java.util.Date(timestamp))
-            }
-        }
-    }
-    
-    /**
-     * Get file type category for UI grouping
-     */
-    fun getFileTypeCategory(fileType: String): ModuleDetailViewModel.FileTypeCategory {
-        return when (fileType.lowercase()) {
-            "pdf" -> ModuleDetailViewModel.FileTypeCategory.PDF
-            "doc", "docx" -> ModuleDetailViewModel.FileTypeCategory.DOCUMENT
-            "xls", "xlsx" -> ModuleDetailViewModel.FileTypeCategory.SPREADSHEET
-            "ppt", "pptx" -> ModuleDetailViewModel.FileTypeCategory.PRESENTATION
-            "jpg", "jpeg", "png", "gif" -> ModuleDetailViewModel.FileTypeCategory.IMAGE
-            "mp4", "avi", "mov" -> ModuleDetailViewModel.FileTypeCategory.VIDEO
-            "mp3", "wav" -> ModuleDetailViewModel.FileTypeCategory.AUDIO
-            "zip", "rar", "7z" -> ModuleDetailViewModel.FileTypeCategory.ARCHIVE
-            else -> ModuleDetailViewModel.FileTypeCategory.OTHER
-        }
     }
     
     /**

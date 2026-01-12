@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun KolpingCockpitApp(tokenManager: TokenManager) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Loading) }
+    var previousScreen by remember { mutableStateOf<Screen>(Screen.Home) }
     var selectedModuleId by remember { mutableStateOf<String?>(null) }
     var selectedFilePath by remember { mutableStateOf<String?>(null) }
     var selectedFileName by remember { mutableStateOf<String?>(null) }
@@ -66,12 +67,15 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
             HomeScreen(
                 onNavigateToModuleDetail = { moduleId ->
                     selectedModuleId = moduleId
+                    previousScreen = Screen.Home
                     currentScreen = Screen.ModuleDetail
                 },
                 onNavigateToCalendar = {
+                    previousScreen = Screen.Home
                     currentScreen = Screen.Calendar
                 },
                 onNavigateToOfflineLibrary = {
+                    previousScreen = Screen.Home
                     currentScreen = Screen.OfflineLibrary
                 }
             )
@@ -91,7 +95,7 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         Screen.Calendar -> {
             CalendarScreen(
                 onNavigateBack = {
-                    currentScreen = Screen.Home
+                    currentScreen = previousScreen
                 }
             )
         }
@@ -101,30 +105,35 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
                 ModuleDetailScreen(
                     moduleId = moduleId,
                     onNavigateBack = {
-                        currentScreen = Screen.Home
+                        currentScreen = previousScreen
                     },
                     onOpenFile = { file ->
                         if (file.fileType.lowercase() == "pdf") {
                             selectedFilePath = file.filePath
                             selectedFileName = file.fileName
+                            previousScreen = Screen.ModuleDetail
                             currentScreen = Screen.PdfViewer
                         } else {
                             // TODO: Handle other file types (open with system app)
                         }
                     }
                 )
+            } ?: run {
+                // Handle null moduleId - navigate back to Home
+                currentScreen = Screen.Home
             }
         }
         
         Screen.OfflineLibrary -> {
             OfflineLibraryScreen(
                 onNavigateBack = {
-                    currentScreen = Screen.Home
+                    currentScreen = previousScreen
                 },
                 onOpenFile = { file ->
                     if (file.fileType.lowercase() == "pdf") {
                         selectedFilePath = file.filePath
                         selectedFileName = file.fileName
+                        previousScreen = Screen.OfflineLibrary
                         currentScreen = Screen.PdfViewer
                     } else {
                         // TODO: Handle other file types
@@ -139,9 +148,12 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
                     filePath = filePath,
                     fileName = selectedFileName ?: "PDF Dokument",
                     onNavigateBack = {
-                        currentScreen = Screen.Home
+                        currentScreen = previousScreen
                     }
                 )
+            } ?: run {
+                // Handle null filePath - navigate back to previous screen
+                currentScreen = previousScreen
             }
         }
         
