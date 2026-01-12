@@ -109,29 +109,39 @@ class FileStorageManager(private val context: Context) {
      * Performs canonical path validation to prevent path traversal via fileName.
      * @return File object pointing to the saved file
      * @throws IllegalArgumentException if fileName contains path traversal sequences
+     * @throws IOException if canonical path resolution fails
      */
     fun saveFile(directory: File, fileName: String, inputStream: InputStream): File {
-        // Ensure the target directory exists
-        directory.mkdirs()
+        try {
+            // Ensure the target directory exists
+            directory.mkdirs()
 
-        // Resolve canonical directory to have a normalized base path
-        val canonicalDir = directory.canonicalFile
+            // Resolve canonical directory to have a normalized base path
+            val canonicalDir = directory.canonicalFile
 
-        // Build the target file relative to the canonical directory and resolve it canonically
-        val targetFile = File(canonicalDir, fileName)
-        val canonicalTarget = targetFile.canonicalFile
+            // Build the target file relative to the canonical directory and resolve it canonically
+            val targetFile = File(canonicalDir, fileName)
+            val canonicalTarget = targetFile.canonicalFile
 
-        // Verify that the canonical target path is still within the canonical directory
-        val canonicalDirPath = canonicalDir.path + File.separator
-        if (!canonicalTarget.path.startsWith(canonicalDirPath)) {
-            throw IllegalArgumentException("Invalid file name: path traversal is not allowed")
+            // Verify that the canonical target path is still within the canonical directory
+            // Use explicit ignoreCase = false for consistent behavior across platforms
+            val canonicalDirPath = canonicalDir.path + File.separator
+            if (!canonicalTarget.path.startsWith(canonicalDirPath, ignoreCase = false)) {
+                throw IllegalArgumentException("Invalid file name: path traversal is not allowed")
+            }
+
+            // Write to the validated canonical target
+            canonicalTarget.outputStream().use { outputStream ->
+                inputStream.copyTo(outputStream)
+            }
+            return canonicalTarget
+        } catch (e: IOException) {
+            android.util.Log.e("FileStorageManager", "IOException saving file: ${e.message}")
+            throw e
+        } catch (e: SecurityException) {
+            android.util.Log.e("FileStorageManager", "SecurityException saving file: ${e.message}")
+            throw e
         }
-
-        // Write to the validated canonical target
-        canonicalTarget.outputStream().use { outputStream ->
-            inputStream.copyTo(outputStream)
-        }
-        return canonicalTarget
     }
     
     /**
