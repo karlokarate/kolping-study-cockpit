@@ -61,6 +61,7 @@ fun HomeScreen(
                         modules = state.currentSemesterModules,
                         events = state.upcomingEvents,
                         lastSyncTimestamp = state.lastSyncTimestamp,
+                        isSyncing = syncState is HomeViewModel.SyncState.Syncing,
                         onSyncClick = { viewModel.startSync() },
                         onModuleClick = onNavigateToModuleDetail,
                         onEventClick = { onNavigateToCalendar() },
@@ -121,6 +122,7 @@ private fun HomeContent(
     modules: List<de.kolping.cockpit.android.database.entities.ModuleEntity>,
     events: List<de.kolping.cockpit.android.database.entities.CalendarEventEntity>,
     lastSyncTimestamp: Long,
+    isSyncing: Boolean,
     onSyncClick: () -> Unit,
     onModuleClick: (String) -> Unit,
     onEventClick: () -> Unit,
@@ -166,7 +168,8 @@ private fun HomeContent(
         item {
             SyncButton(
                 lastSyncText = formatLastSync(lastSyncTimestamp),
-                onSyncClick = onSyncClick
+                onSyncClick = onSyncClick,
+                enabled = !isSyncing
             )
         }
         

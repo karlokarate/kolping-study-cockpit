@@ -10,6 +10,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kolping.cockpit.android.database.entities.ModuleEntity
 
+// Constants for styling
+private const val STATUS_BADGE_ALPHA = 0.5f
+
 /**
  * Card component for displaying a module
  * Shows module name, grade, ECTS, and status
@@ -127,11 +130,11 @@ fun ModuleCard(
 private fun getExamStatusColors(status: String): StatusColors {
     return when (status) {
         "bestanden", "passed" -> StatusColors(
-            backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+            backgroundColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = STATUS_BADGE_ALPHA),
             textColor = MaterialTheme.colorScheme.primary
         )
         "nicht bestanden", "failed" -> StatusColors(
-            backgroundColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+            backgroundColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = STATUS_BADGE_ALPHA),
             textColor = MaterialTheme.colorScheme.error
         )
         else -> StatusColors(

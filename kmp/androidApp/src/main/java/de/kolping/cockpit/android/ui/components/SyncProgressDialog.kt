@@ -10,6 +10,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 
+// Constants for conversions
+private const val PROGRESS_TO_PERCENTAGE = 100
+private const val MILLIS_PER_SECOND = 1000L
+
 /**
  * Dialog component showing sync progress
  * Displays current phase, progress bar, and file counter
@@ -20,8 +24,7 @@ fun SyncProgressDialog(
     phase: String,
     progress: Float,
     filesDownloaded: Int,
-    totalFiles: Int,
-    onDismiss: () -> Unit = {}
+    totalFiles: Int
 ) {
     Dialog(
         onDismissRequest = { /* Prevent dismissal during sync to avoid interrupting the process */ },
@@ -72,7 +75,7 @@ fun SyncProgressDialog(
                     
                     // Progress percentage
                     Text(
-                        text = "${(progress * 100).toInt()}%",
+                        text = "${(progress * PROGRESS_TO_PERCENTAGE).toInt()}%",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.align(Alignment.End)
@@ -143,14 +146,14 @@ fun SyncSuccessDialog(
                 
                 SyncResultRow("Module:", "$modulesCount")
                 SyncResultRow("Kurse:", "$coursesCount")
-                SyncResultRow("Events:", "$eventsCount")
+                SyncResultRow("Veranstaltungen:", "$eventsCount")
                 if (filesDownloaded > 0) {
                     SyncResultRow("Dateien:", "$filesDownloaded")
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                val durationSeconds = durationMs / 1000
+                val durationSeconds = durationMs / MILLIS_PER_SECOND
                 Text(
                     text = "Dauer: ${durationSeconds}s",
                     style = MaterialTheme.typography.bodySmall,
