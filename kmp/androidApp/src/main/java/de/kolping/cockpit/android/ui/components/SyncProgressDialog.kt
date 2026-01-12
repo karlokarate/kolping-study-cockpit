@@ -24,7 +24,7 @@ fun SyncProgressDialog(
     onDismiss: () -> Unit = {}
 ) {
     Dialog(
-        onDismissRequest = { /* Don't allow dismissal during sync */ },
+        onDismissRequest = { /* Prevent dismissal during sync to avoid interrupting the process */ },
         properties = DialogProperties(
             dismissOnBackPress = false,
             dismissOnClickOutside = false

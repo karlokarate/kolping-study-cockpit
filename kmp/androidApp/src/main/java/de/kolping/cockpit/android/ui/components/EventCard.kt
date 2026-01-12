@@ -13,6 +13,11 @@ import de.kolping.cockpit.android.database.entities.CalendarEventEntity
 import java.text.SimpleDateFormat
 import java.util.*
 
+// Constants for time conversion
+private const val SECONDS_TO_MILLISECONDS = 1000L
+private const val SECONDS_TO_MINUTES = 60L
+private const val MINUTES_PER_HOUR = 60L
+
 /**
  * Card component for displaying a calendar event
  * Shows event name, date/time, and course name
@@ -86,15 +91,15 @@ fun EventCard(
  */
 private fun formatEventDateTime(timestart: Long, timeduration: Long?): String {
     val sdf = SimpleDateFormat("dd.MM.yyyy, HH:mm", Locale.GERMAN)
-    val startTime = Date(timestart * 1000) // Convert from seconds to milliseconds
+    val startTime = Date(timestart * SECONDS_TO_MILLISECONDS)
     
     val formatted = sdf.format(startTime)
     
     // Add duration if available
     return if (timeduration != null && timeduration > 0) {
-        val durationMinutes = timeduration / 60
-        val hours = durationMinutes / 60
-        val minutes = durationMinutes % 60
+        val durationMinutes = timeduration / SECONDS_TO_MINUTES
+        val hours = durationMinutes / MINUTES_PER_HOUR
+        val minutes = durationMinutes % MINUTES_PER_HOUR
         
         when {
             hours > 0 && minutes > 0 -> "$formatted ($hours h $minutes min)"
