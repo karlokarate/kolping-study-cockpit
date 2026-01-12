@@ -81,7 +81,7 @@ fun SyncProgressDialog(
                 
                 // File counter if files are being downloaded
                 if (totalFiles > 0) {
-                    Divider()
+                    HorizontalDivider()
                     
                     Row(
                         modifier = Modifier.fillMaxWidth(),
