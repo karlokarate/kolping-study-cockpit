@@ -6,7 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import de.kolping.cockpit.android.auth.TokenManager
 import de.kolping.cockpit.android.database.KolpingDatabase
+import de.kolping.cockpit.android.repository.OfflineRepository
 import de.kolping.cockpit.android.storage.FileStorageManager
+import de.kolping.cockpit.android.sync.DownloadManager
+import de.kolping.cockpit.android.sync.SyncManager
 import de.kolping.cockpit.android.viewmodel.DashboardViewModel
 import de.kolping.cockpit.android.viewmodel.GradesViewModel
 import de.kolping.cockpit.android.viewmodel.CoursesViewModel
@@ -39,6 +42,39 @@ val appModule = module {
     
     // File Storage Manager
     single { FileStorageManager(get()) }
+    
+    // Download Manager
+    single { DownloadManager(get()) }
+    
+    // Offline Repository
+    single { 
+        OfflineRepository(
+            moduleDao = get(),
+            courseDao = get(),
+            fileDao = get(),
+            calendarEventDao = get(),
+            studentProfileDao = get()
+        )
+    }
+    
+    // Sync Manager (factory to get fresh clients with tokens)
+    factory {
+        val tokenManager: TokenManager = get()
+        val bearerToken = tokenManager.getBearerTokenSync()
+        val sessionCookie = tokenManager.getSessionCookieSync()
+        
+        SyncManager(
+            graphQLClient = GraphQLClient(bearerToken),
+            moodleClient = MoodleClient(sessionCookie),
+            fileStorage = get(),
+            downloadManager = get(),
+            moduleDao = get(),
+            courseDao = get(),
+            fileDao = get(),
+            calendarEventDao = get(),
+            studentProfileDao = get()
+        )
+    }
     
     // API Clients (singletons that get tokens from Flow)
     single { 
