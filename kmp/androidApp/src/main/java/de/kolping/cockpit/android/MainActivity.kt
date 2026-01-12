@@ -40,7 +40,7 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
     
     LaunchedEffect(isAuthenticated) {
         currentScreen = if (isAuthenticated) {
-            Screen.Dashboard
+            Screen.Home
         } else {
             Screen.Login
         }
@@ -54,12 +54,47 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         Screen.Login -> {
             LoginScreen(
                 onLoginSuccess = {
-                    currentScreen = Screen.Dashboard
+                    currentScreen = Screen.Home
+                }
+            )
+        }
+        
+        Screen.Home -> {
+            HomeScreen(
+                onNavigateToModuleDetail = { moduleId ->
+                    currentScreen = Screen.ModuleDetail
+                },
+                onNavigateToCalendar = {
+                    currentScreen = Screen.Calendar
                 }
             )
         }
         
         Screen.Dashboard -> {
+            DashboardScreen(
+                onNavigateToGrades = {
+                    currentScreen = Screen.Grades
+                },
+                onNavigateToCourses = {
+                    currentScreen = Screen.Courses
+                }
+            )
+        }
+        
+        Screen.Calendar -> {
+            // TODO: Implement CalendarScreen in future PR
+            DashboardScreen(
+                onNavigateToGrades = {
+                    currentScreen = Screen.Grades
+                },
+                onNavigateToCourses = {
+                    currentScreen = Screen.Courses
+                }
+            )
+        }
+        
+        Screen.ModuleDetail -> {
+            // TODO: Implement ModuleDetailScreen in future PR
             DashboardScreen(
                 onNavigateToGrades = {
                     currentScreen = Screen.Grades
@@ -92,6 +127,9 @@ sealed class Screen {
     object Loading : Screen()
     object Login : Screen()
     object Dashboard : Screen()
+    object Home : Screen()
     object Grades : Screen()
     object Courses : Screen()
+    object Calendar : Screen()
+    object ModuleDetail : Screen()
 }
