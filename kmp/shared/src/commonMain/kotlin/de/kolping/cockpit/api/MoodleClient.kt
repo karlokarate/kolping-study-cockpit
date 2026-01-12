@@ -274,6 +274,65 @@ class MoodleClient(
         }
     }
     
+    /**
+     * Extract sesskey from Moodle HTML page
+     * The sesskey is required for AJAX API calls
+     * 
+     * Looks for patterns like:
+     * - "sesskey":"abc123def456"
+     * - M.cfg.sesskey = "abc123def456"
+     * - sesskey=abc123def456 (in URLs)
+     * 
+     * @return sesskey string or null if not found
+     */
+    suspend fun extractSesskey(): Result<String> {
+        return try {
+            val response = client.get("$baseUrl/my/")
+            val html = response.bodyAsText()
+            
+            // Try multiple patterns to find sesskey
+            val patterns = listOf(
+                Regex(""""sesskey"\s*:\s*"([a-zA-Z0-9]+)""""),
+                Regex("""M\.cfg\.sesskey\s*=\s*"([a-zA-Z0-9]+)""""),
+                Regex("""sesskey=([a-zA-Z0-9]+)"""),
+                Regex("""'sesskey'\s*:\s*'([a-zA-Z0-9]+)'""")
+            )
+            
+            for (pattern in patterns) {
+                val match = pattern.find(html)
+                if (match != null && match.groupValues.size > 1) {
+                    val sesskey = match.groupValues[1]
+                    if (sesskey.isNotBlank()) {
+                        return Result.success(sesskey)
+                    }
+                }
+            }
+            
+            Result.failure(Exception("Could not extract sesskey from HTML"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Create a MoodleAjaxClient using the current session
+     * Automatically extracts sesskey from the current session
+     * 
+     * @return MoodleAjaxClient configured with session cookie and sesskey
+     */
+    suspend fun createAjaxClient(): Result<MoodleAjaxClient> {
+        if (!isAuthenticated) {
+            return Result.failure(Exception("Not authenticated - session cookie required"))
+        }
+        
+        return try {
+            val sesskey = extractSesskey().getOrThrow()
+            Result.success(MoodleAjaxClient(sessionCookie!!, sesskey, baseUrl))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
     fun close() {
         client.close()
     }
