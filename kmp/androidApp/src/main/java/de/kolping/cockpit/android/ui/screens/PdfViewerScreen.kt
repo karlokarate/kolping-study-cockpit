@@ -10,7 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import com.github.barteksc.pdfviewer.PDFView
+import com.alamin5g.pdf.PDFView
 import java.io.File
 
 /**
@@ -87,7 +87,6 @@ fun PdfViewerScreen(
                                     .enableDoubletap(true)
                                     .defaultPage(0)
                                     .enableAnnotationRendering(false)
-                                    .password(null)
                                     .scrollHandle(null)
                                     .enableAntialiasing(true)
                                     .spacing(10)
