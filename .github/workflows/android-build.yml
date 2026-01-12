@@ -65,13 +65,15 @@ jobs:
 
       - name: Build Debug APK
         if: steps.build-config.outputs.build_type == 'debug'
+        continue-on-error: true
         working-directory: kmp
-        run: ./gradlew :androidApp:assembleDebug
+        run: ./gradlew :androidApp:assembleDebug --continue 2>&1 | tee build-output.log || echo "BUILD_FAILED=true" >> $GITHUB_ENV
 
       - name: Build Release APK
         if: steps.build-config.outputs.build_type == 'release'
+        continue-on-error: true
         working-directory: kmp
-        run: ./gradlew :androidApp:assembleRelease
+        run: ./gradlew :androidApp:assembleRelease --continue 2>&1 | tee build-output.log || echo "BUILD_FAILED=true" >> $GITHUB_ENV
         # Note: For signed release builds, configure the following:
         # 1. Add keystore file as GitHub Secret:
         #    ANDROID_KEYSTORE_BASE64
@@ -102,9 +104,36 @@ jobs:
           retention-days: 30
 
       - name: Upload Build Reports
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-reports
           path: kmp/androidApp/build/reports/
           retention-days: 7
+
+      - name: Upload Build Output Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output-log
+          path: kmp/build-output.log
+          retention-days: 7
+
+      - name: Build Summary
+        if: always()
+        working-directory: kmp
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          if [ "$BUILD_FAILED" = "true" ]; then
+            echo "❌ **Build failed!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### Error Details:" >> $GITHUB_STEP_SUMMARY
+            if [ -f build-output.log ]; then
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep -A 5 "FAILURE\|ERROR\|error:" build-output.log | head -100 >> $GITHUB_STEP_SUMMARY || true
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+            exit 1
+          else
+            echo "✅ **Build succeeded!**" >> $GITHUB_STEP_SUMMARY
+          fi
