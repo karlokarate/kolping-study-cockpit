@@ -73,11 +73,22 @@ class FileStorageManager(private val context: Context) {
      * Validate ID to prevent path traversal attacks
      * @param id The identifier to validate
      * @param idName The name of the identifier for error messages
-     * @throws IllegalArgumentException if the ID contains path traversal sequences
+     * @throws IllegalArgumentException if the ID contains path traversal sequences or invalid characters
      */
     private fun validateId(id: String, idName: String) {
+        // Check for path traversal sequences
         if (id.contains("..") || id.contains("/") || id.contains("\\")) {
             throw IllegalArgumentException("Invalid $idName: path traversal is not allowed")
+        }
+        
+        // Check for null bytes and control characters
+        if (id.contains('\u0000') || id.any { it.isISOControl() }) {
+            throw IllegalArgumentException("Invalid $idName: control characters are not allowed")
+        }
+        
+        // Whitelist approach: only allow alphanumeric, hyphens, and underscores
+        if (!id.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
+            throw IllegalArgumentException("Invalid $idName: only alphanumeric characters, hyphens, and underscores are allowed")
         }
     }
     
@@ -208,7 +219,8 @@ class FileStorageManager(private val context: Context) {
     fun fileExists(filePath: String): Boolean {
         return try {
             val file = File(syncDir, filePath)
-            file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)
+            val canonicalSyncPath = syncDir.canonicalPath + File.separator
+            file.exists() && file.canonicalPath.startsWith(canonicalSyncPath, ignoreCase = false)
         } catch (e: IOException) {
             // Log and return false if canonical path resolution fails
             android.util.Log.w("FileStorageManager", "IOException checking file existence: ${e.message}")
@@ -228,7 +240,8 @@ class FileStorageManager(private val context: Context) {
     fun getFile(filePath: String): File? {
         return try {
             val file = File(syncDir, filePath)
-            if (file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)) {
+            val canonicalSyncPath = syncDir.canonicalPath + File.separator
+            if (file.exists() && file.canonicalPath.startsWith(canonicalSyncPath, ignoreCase = false)) {
                 file
             } else {
                 null

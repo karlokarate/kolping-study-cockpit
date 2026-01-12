@@ -19,15 +19,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-        
-        // Room schema export location for migration support
-        javaCompileOptions {
-            annotationProcessorOptions {
-                arguments += mapOf(
-                    "room.schemaLocation" to "$projectDir/schemas"
-                )
-            }
-        }
     }
     
     buildTypes {
@@ -100,4 +91,11 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
+}
+
+// Room schema export location for migration support
+kapt {
+    arguments {
+        arg("room.schemaLocation", "$projectDir/schemas")
+    }
 }
