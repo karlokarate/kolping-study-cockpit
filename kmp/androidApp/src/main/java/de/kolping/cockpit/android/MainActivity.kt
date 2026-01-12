@@ -70,6 +70,9 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
                 },
                 onNavigateToCalendar = {
                     currentScreen = Screen.Calendar
+                },
+                onNavigateToOfflineLibrary = {
+                    currentScreen = Screen.OfflineLibrary
                 }
             )
         }

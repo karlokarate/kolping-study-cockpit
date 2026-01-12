@@ -25,6 +25,7 @@ import org.koin.androidx.compose.koinViewModel
 fun HomeScreen(
     onNavigateToModuleDetail: (String) -> Unit = {},
     onNavigateToCalendar: () -> Unit = {},
+    onNavigateToOfflineLibrary: () -> Unit = {},
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = koinViewModel()
 ) {
@@ -38,6 +39,11 @@ fun HomeScreen(
                 navigationIcon = {
                     IconButton(onClick = { /* TODO: Open navigation drawer */ }) {
                         Icon(Icons.Default.Menu, contentDescription = "Menü")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToOfflineLibrary) {
+                        Icon(Icons.Default.Folder, contentDescription = "Offline-Bibliothek")
                     }
                 }
             )
