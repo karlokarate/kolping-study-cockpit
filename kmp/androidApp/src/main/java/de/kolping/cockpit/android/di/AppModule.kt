@@ -15,6 +15,9 @@ import de.kolping.cockpit.android.viewmodel.GradesViewModel
 import de.kolping.cockpit.android.viewmodel.CoursesViewModel
 import de.kolping.cockpit.android.viewmodel.LoginViewModel
 import de.kolping.cockpit.android.viewmodel.HomeViewModel
+import de.kolping.cockpit.android.viewmodel.ModuleDetailViewModel
+import de.kolping.cockpit.android.viewmodel.CalendarViewModel
+import de.kolping.cockpit.android.viewmodel.OfflineLibraryViewModel
 import de.kolping.cockpit.api.GraphQLClient
 import de.kolping.cockpit.api.MoodleClient
 import de.kolping.cockpit.repository.StudyRepository
@@ -110,4 +113,7 @@ val appModule = module {
     viewModel { DashboardViewModel(get()) }
     viewModel { GradesViewModel(get()) }
     viewModel { CoursesViewModel(get()) }
+    viewModel { (moduleId: String) -> ModuleDetailViewModel(get(), moduleId) }
+    viewModel { CalendarViewModel(get()) }
+    viewModel { OfflineLibraryViewModel(get(), get()) }
 }

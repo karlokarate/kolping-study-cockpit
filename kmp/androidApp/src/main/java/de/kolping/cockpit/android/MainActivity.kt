@@ -36,6 +36,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun KolpingCockpitApp(tokenManager: TokenManager) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Loading) }
+    var selectedModuleId by remember { mutableStateOf<String?>(null) }
     val isAuthenticated by tokenManager.isAuthenticatedFlow.collectAsState(initial = false)
     
     LaunchedEffect(isAuthenticated) {
@@ -62,6 +63,7 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         Screen.Home -> {
             HomeScreen(
                 onNavigateToModuleDetail = { moduleId ->
+                    selectedModuleId = moduleId
                     currentScreen = Screen.ModuleDetail
                 },
                 onNavigateToCalendar = {
@@ -82,27 +84,25 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         }
         
         Screen.Calendar -> {
-            // TODO: Implement CalendarScreen in future PR
-            DashboardScreen(
-                onNavigateToGrades = {
-                    currentScreen = Screen.Grades
-                },
-                onNavigateToCourses = {
-                    currentScreen = Screen.Courses
+            CalendarScreen(
+                onNavigateBack = {
+                    currentScreen = Screen.Home
                 }
             )
         }
         
         Screen.ModuleDetail -> {
-            // TODO: Implement ModuleDetailScreen in future PR
-            DashboardScreen(
-                onNavigateToGrades = {
-                    currentScreen = Screen.Grades
-                },
-                onNavigateToCourses = {
-                    currentScreen = Screen.Courses
-                }
-            )
+            selectedModuleId?.let { moduleId ->
+                ModuleDetailScreen(
+                    moduleId = moduleId,
+                    onNavigateBack = {
+                        currentScreen = Screen.Home
+                    },
+                    onOpenFile = { file ->
+                        // TODO: Implement file opening (PDF viewer, etc.)
+                    }
+                )
+            }
         }
         
         Screen.Grades -> {
