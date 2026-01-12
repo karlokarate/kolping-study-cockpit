@@ -109,12 +109,14 @@ class DownloadManager(
             val buffer = ByteArray(BUFFER_SIZE)
             var bytesDownloaded = existingSize
             
-            targetFile.outputStream().use { output ->
-                // If resuming, append to existing file
-                if (resumeIfExists && existingSize > 0) {
-                    output.channel.position(existingSize)
-                }
-                
+            // Open file in append mode if resuming, otherwise overwrite
+            val fileOutputStream = if (resumeIfExists && existingSize > 0) {
+                java.io.FileOutputStream(targetFile, true)
+            } else {
+                java.io.FileOutputStream(targetFile, false)
+            }
+            
+            fileOutputStream.use { output ->
                 while (!channel.isClosedForRead) {
                     val bytesRead = channel.readAvailable(buffer, 0, buffer.size)
                     if (bytesRead > 0) {

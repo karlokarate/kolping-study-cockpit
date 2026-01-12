@@ -326,8 +326,10 @@ class MoodleClient(
         }
         
         return try {
+            val cookie = sessionCookie
+                ?: return Result.failure(Exception("Not authenticated - session cookie missing"))
             val sesskey = extractSesskey().getOrThrow()
-            Result.success(MoodleAjaxClient(sessionCookie!!, sesskey, baseUrl))
+            Result.success(MoodleAjaxClient(cookie, sesskey, baseUrl))
         } catch (e: Exception) {
             Result.failure(e)
         }

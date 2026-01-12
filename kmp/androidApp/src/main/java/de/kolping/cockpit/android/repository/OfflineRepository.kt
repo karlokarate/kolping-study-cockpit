@@ -162,15 +162,4 @@ class OfflineRepository(
         calendarEventDao.deleteAllEvents()
         studentProfileDao.deleteAllProfiles()
     }
-    
-    /**
-     * Get current semester from student profile
-     * Returns null if no profile is stored
-     */
-    suspend fun getCurrentSemester(): Int? {
-        // Since getProfile() returns Flow, we can't directly await it
-        // This is a utility that should be called from a coroutine
-        // In practice, UI will observe the Flow directly
-        return null // TODO: Implement if needed
-    }
 }

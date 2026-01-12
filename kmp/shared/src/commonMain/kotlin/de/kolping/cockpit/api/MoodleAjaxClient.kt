@@ -86,7 +86,12 @@ class MoodleAjaxClient(
      */
     private suspend fun executeAjaxCalls(calls: List<MoodleAjaxCall>): Result<List<MoodleAjaxResult>> {
         return try {
-            val url = "$baseUrl/lib/ajax/service.php?sesskey=$sesskey&info=${calls.firstOrNull()?.methodname ?: ""}"
+            val infoParam = when {
+                calls.isEmpty() -> ""
+                calls.size == 1 -> calls.first().methodname
+                else -> "batch"
+            }
+            val url = "$baseUrl/lib/ajax/service.php?sesskey=$sesskey&info=$infoParam"
             
             val response: HttpResponse = client.post(url) {
                 contentType(ContentType.Application.Json)
@@ -248,9 +253,10 @@ class MoodleAjaxClient(
                 }
             }
             
-            // Remove duplicates based on event ID
+            // Remove duplicates based on event ID using a HashSet for O(n) behavior
+            val seenIds = mutableSetOf<Any?>()
             val uniqueEvents = allEvents
-                .distinctBy { it.id }
+                .filter { event -> seenIds.add(event.id) }
                 .sortedBy { it.timestart ?: 0L }
             
             Result.success(uniqueEvents)

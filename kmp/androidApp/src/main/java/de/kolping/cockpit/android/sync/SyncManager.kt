@@ -174,7 +174,7 @@ class SyncManager(
      */
     private suspend fun syncGrades(): Int {
         try {
-            val gradeOverview = graphQLClient.getGradeOverview().getOrThrow()
+            val gradeOverview = graphQLClient.getMyGradeOverview().getOrThrow().myStudentGradeOverview
             val currentTime = System.currentTimeMillis()
             
             // Convert to entities and save
@@ -212,8 +212,8 @@ class SyncManager(
      */
     private suspend fun syncProfile(): Boolean {
         try {
-            val student = graphQLClient.getMyStudentData().getOrThrow()
-            val gradeOverview = graphQLClient.getGradeOverview().getOrThrow()
+            val student = graphQLClient.getMyStudentData().getOrThrow().myStudentData
+            val gradeOverview = graphQLClient.getMyGradeOverview().getOrThrow().myStudentGradeOverview
             val currentTime = System.currentTimeMillis()
             
             val profileEntity = StudentProfileEntity(
@@ -228,7 +228,7 @@ class SyncManager(
             )
             
             studentProfileDao.insertProfile(profileEntity)
-            Log.d(TAG, "Synced student profile: ${student.vorname} ${student.nachname}")
+            Log.d(TAG, "Synced student profile successfully")
             
             return true
         } catch (e: Exception) {
@@ -245,39 +245,42 @@ class SyncManager(
      * @return Number of courses synced
      */
     private suspend fun syncCourses(): Int {
-        try {
+        return try {
             // Create AJAX client from Moodle session
             val ajaxClient = moodleClient.createAjaxClient().getOrThrow()
             
-            // Fetch enrolled courses
-            val coursesData = ajaxClient.getEnrolledCourses(
-                classification = "all",
-                sort = "fullname",
-                limit = 0
-            ).getOrThrow()
-            
-            val currentTime = System.currentTimeMillis()
-            
-            // Convert to entities and save
-            val courseEntities = coursesData.courses.map { course ->
-                CourseEntity(
-                    id = course.id,
-                    fullname = course.fullname,
-                    shortname = course.shortname,
-                    courseimage = course.courseimage,
-                    progress = course.progress,
-                    viewurl = course.viewurl,
-                    startdate = course.startdate,
-                    enddate = course.enddate,
-                    lastSync = currentTime
-                )
+            try {
+                // Fetch enrolled courses
+                val coursesData = ajaxClient.getEnrolledCourses(
+                    classification = "all",
+                    sort = "fullname",
+                    limit = 0
+                ).getOrThrow()
+                
+                val currentTime = System.currentTimeMillis()
+                
+                // Convert to entities and save
+                val courseEntities = coursesData.courses.map { course ->
+                    CourseEntity(
+                        id = course.id,
+                        fullname = course.fullname,
+                        shortname = course.shortname,
+                        courseimage = course.courseimage,
+                        progress = course.progress,
+                        viewurl = course.viewurl,
+                        startdate = course.startdate,
+                        enddate = course.enddate,
+                        lastSync = currentTime
+                    )
+                }
+                
+                courseDao.insertCourses(courseEntities)
+                Log.d(TAG, "Synced ${courseEntities.size} courses")
+                
+                courseEntities.size
+            } finally {
+                ajaxClient.close()
             }
-            
-            courseDao.insertCourses(courseEntities)
-            Log.d(TAG, "Synced ${courseEntities.size} courses")
-            
-            ajaxClient.close()
-            return courseEntities.size
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync courses", e)
             throw e
@@ -292,50 +295,53 @@ class SyncManager(
      * @return Number of events synced
      */
     private suspend fun syncCalendar(): Int {
-        try {
+        return try {
             // Create AJAX client from Moodle session
             val ajaxClient = moodleClient.createAjaxClient().getOrThrow()
             
-            // Get current date
-            val calendar = Calendar.getInstance()
-            val currentYear = calendar.get(Calendar.YEAR)
-            val currentMonth = calendar.get(Calendar.MONTH) + 1 // Calendar.MONTH is 0-based
-            
-            // Fetch calendar events for next N months
-            val events = ajaxClient.getCalendarEvents(
-                startYear = currentYear,
-                startMonth = currentMonth,
-                monthCount = CALENDAR_MONTHS_TO_SYNC,
-                courseId = 1 // 1 = all courses
-            ).getOrThrow()
-            
-            val currentTime = System.currentTimeMillis()
-            
-            // Convert to entities and save
-            val eventEntities = events.mapNotNull { event ->
-                if (event.id == null || event.name == null) {
-                    return@mapNotNull null
+            try {
+                // Get current date
+                val calendar = Calendar.getInstance()
+                val currentYear = calendar.get(Calendar.YEAR)
+                val currentMonth = calendar.get(Calendar.MONTH) + 1 // Calendar.MONTH is 0-based
+                
+                // Fetch calendar events for next N months
+                val events = ajaxClient.getCalendarEvents(
+                    startYear = currentYear,
+                    startMonth = currentMonth,
+                    monthCount = CALENDAR_MONTHS_TO_SYNC,
+                    courseId = 1 // 1 = all courses
+                ).getOrThrow()
+                
+                val currentTime = System.currentTimeMillis()
+                
+                // Convert to entities and save
+                val eventEntities = events.mapNotNull { event ->
+                    if (event.id == null || event.name == null) {
+                        return@mapNotNull null
+                    }
+                    
+                    CalendarEventEntity(
+                        id = event.id,
+                        name = event.name,
+                        description = event.description,
+                        eventtype = event.eventtype,
+                        timestart = event.timestart ?: 0L,
+                        timeduration = event.timeduration,
+                        courseId = event.course?.id,
+                        courseName = event.course?.fullname,
+                        viewurl = event.viewurl,
+                        lastSync = currentTime
+                    )
                 }
                 
-                CalendarEventEntity(
-                    id = event.id,
-                    name = event.name,
-                    description = event.description,
-                    eventtype = event.eventtype,
-                    timestart = event.timestart ?: 0L,
-                    timeduration = event.timeduration,
-                    courseId = event.course?.id,
-                    courseName = event.course?.fullname,
-                    viewurl = event.viewurl,
-                    lastSync = currentTime
-                )
+                calendarEventDao.insertEvents(eventEntities)
+                Log.d(TAG, "Synced ${eventEntities.size} calendar events")
+                
+                eventEntities.size
+            } finally {
+                ajaxClient.close()
             }
-            
-            calendarEventDao.insertEvents(eventEntities)
-            Log.d(TAG, "Synced ${eventEntities.size} calendar events")
-            
-            ajaxClient.close()
-            return eventEntities.size
         } catch (e: Exception) {
             Log.e(TAG, "Failed to sync calendar", e)
             throw e
