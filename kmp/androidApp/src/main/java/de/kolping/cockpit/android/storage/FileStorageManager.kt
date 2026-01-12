@@ -71,22 +71,15 @@ class FileStorageManager(private val context: Context) {
     
     /**
      * Validate ID to prevent path traversal attacks
+     * Uses whitelist approach: only allows alphanumeric characters, hyphens, and underscores
+     * This automatically prevents path traversal, control characters, and null bytes
      * @param id The identifier to validate
      * @param idName The name of the identifier for error messages
-     * @throws IllegalArgumentException if the ID contains path traversal sequences or invalid characters
+     * @throws IllegalArgumentException if the ID contains invalid characters
      */
     private fun validateId(id: String, idName: String) {
-        // Check for path traversal sequences
-        if (id.contains("..") || id.contains("/") || id.contains("\\")) {
-            throw IllegalArgumentException("Invalid $idName: path traversal is not allowed")
-        }
-        
-        // Check for null bytes and control characters
-        if (id.contains('\u0000') || id.any { it.isISOControl() }) {
-            throw IllegalArgumentException("Invalid $idName: control characters are not allowed")
-        }
-        
         // Whitelist approach: only allow alphanumeric, hyphens, and underscores
+        // This inherently prevents: path traversal (.., /, \), null bytes, and control characters
         if (!id.matches(Regex("^[a-zA-Z0-9_-]+$"))) {
             throw IllegalArgumentException("Invalid $idName: only alphanumeric characters, hyphens, and underscores are allowed")
         }
@@ -118,6 +111,8 @@ class FileStorageManager(private val context: Context) {
     /**
      * Save file to a specific directory
      * Performs canonical path validation to prevent path traversal via fileName.
+     * Note: This method performs I/O operations for canonical path resolution.
+     * Consider caching results if called frequently for the same directory.
      * @return File object pointing to the saved file
      * @throws IllegalArgumentException if fileName contains path traversal sequences
      * @throws IOException if canonical path resolution fails
@@ -127,10 +122,8 @@ class FileStorageManager(private val context: Context) {
             // Ensure the target directory exists
             directory.mkdirs()
 
-            // Resolve canonical directory to have a normalized base path
+            // Resolve canonical paths (expensive I/O operations)
             val canonicalDir = directory.canonicalFile
-
-            // Build the target file relative to the canonical directory and resolve it canonically
             val targetFile = File(canonicalDir, fileName)
             val canonicalTarget = targetFile.canonicalFile
 
