@@ -78,6 +78,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
+    implementation(libs.androidx.material)
     
     // Koin
     implementation(libs.koin.core)
