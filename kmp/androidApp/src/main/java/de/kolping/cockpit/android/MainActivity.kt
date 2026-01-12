@@ -36,6 +36,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun KolpingCockpitApp(tokenManager: TokenManager) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Loading) }
+    var previousScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+    var selectedModuleId by remember { mutableStateOf<String?>(null) }
+    var selectedFilePath by remember { mutableStateOf<String?>(null) }
+    var selectedFileName by remember { mutableStateOf<String?>(null) }
     val isAuthenticated by tokenManager.isAuthenticatedFlow.collectAsState(initial = false)
     
     LaunchedEffect(isAuthenticated) {
@@ -62,10 +66,17 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         Screen.Home -> {
             HomeScreen(
                 onNavigateToModuleDetail = { moduleId ->
+                    selectedModuleId = moduleId
+                    previousScreen = Screen.Home
                     currentScreen = Screen.ModuleDetail
                 },
                 onNavigateToCalendar = {
+                    previousScreen = Screen.Home
                     currentScreen = Screen.Calendar
+                },
+                onNavigateToOfflineLibrary = {
+                    previousScreen = Screen.Home
+                    currentScreen = Screen.OfflineLibrary
                 }
             )
         }
@@ -82,27 +93,68 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         }
         
         Screen.Calendar -> {
-            // TODO: Implement CalendarScreen in future PR
-            DashboardScreen(
-                onNavigateToGrades = {
-                    currentScreen = Screen.Grades
-                },
-                onNavigateToCourses = {
-                    currentScreen = Screen.Courses
+            CalendarScreen(
+                onNavigateBack = {
+                    currentScreen = previousScreen
                 }
             )
         }
         
         Screen.ModuleDetail -> {
-            // TODO: Implement ModuleDetailScreen in future PR
-            DashboardScreen(
-                onNavigateToGrades = {
-                    currentScreen = Screen.Grades
+            selectedModuleId?.let { moduleId ->
+                ModuleDetailScreen(
+                    moduleId = moduleId,
+                    onNavigateBack = {
+                        currentScreen = previousScreen
+                    },
+                    onOpenFile = { file ->
+                        if (file.fileType.lowercase() == "pdf") {
+                            selectedFilePath = file.filePath
+                            selectedFileName = file.fileName
+                            previousScreen = Screen.ModuleDetail
+                            currentScreen = Screen.PdfViewer
+                        } else {
+                            // TODO: Handle other file types (open with system app)
+                        }
+                    }
+                )
+            } ?: run {
+                // Handle null moduleId - navigate back to Home
+                currentScreen = Screen.Home
+            }
+        }
+        
+        Screen.OfflineLibrary -> {
+            OfflineLibraryScreen(
+                onNavigateBack = {
+                    currentScreen = previousScreen
                 },
-                onNavigateToCourses = {
-                    currentScreen = Screen.Courses
+                onOpenFile = { file ->
+                    if (file.fileType.lowercase() == "pdf") {
+                        selectedFilePath = file.filePath
+                        selectedFileName = file.fileName
+                        previousScreen = Screen.OfflineLibrary
+                        currentScreen = Screen.PdfViewer
+                    } else {
+                        // TODO: Handle other file types
+                    }
                 }
             )
+        }
+        
+        Screen.PdfViewer -> {
+            selectedFilePath?.let { filePath ->
+                PdfViewerScreen(
+                    filePath = filePath,
+                    fileName = selectedFileName ?: "PDF Dokument",
+                    onNavigateBack = {
+                        currentScreen = previousScreen
+                    }
+                )
+            } ?: run {
+                // Handle null filePath - navigate back to previous screen
+                currentScreen = previousScreen
+            }
         }
         
         Screen.Grades -> {
@@ -132,4 +184,6 @@ sealed class Screen {
     object Courses : Screen()
     object Calendar : Screen()
     object ModuleDetail : Screen()
+    object OfflineLibrary : Screen()
+    object PdfViewer : Screen()
 }
