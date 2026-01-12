@@ -915,7 +915,7 @@ def analyze_captures(
     This works offline using previously captured data.
     """
     import json
-    from datetime import datetime
+    from datetime import UTC, datetime
     from pathlib import Path
 
     from rich.panel import Panel
@@ -1123,13 +1123,16 @@ def analyze_captures(
             console.print(table)
 
         # Summary
+        bestanden_ects = sum(m.get("eCTS", 0) for m in bestanden)
+        anerkannt_ects = sum(m.get("eCTS", 0) for m in anerkannt)
+        offen_ects = sum(m.get("eCTS", 0) for m in offen)
         summary = f"""
-[green]✓ Bestanden:[/green] {len(bestanden)} Module ({sum(m.get("eCTS", 0) for m in bestanden):.0f} ECTS)
-[green]✓ Anerkannt:[/green] {len(anerkannt)} Module ({sum(m.get("eCTS", 0) for m in anerkannt):.0f} ECTS)
+[green]✓ Bestanden:[/green] {len(bestanden)} Module ({bestanden_ects:.0f} ECTS)
+[green]✓ Anerkannt:[/green] {len(anerkannt)} Module ({anerkannt_ects:.0f} ECTS)
 [red]✗ Nicht bestanden:[/red] {len(nicht_bestanden)} Module
 [blue]○ Angemeldet:[/blue] {len(angemeldet)} Module
 [yellow]○ Abgemeldet:[/yellow] {len(abgemeldet)} Module
-[dim]○ Offen:[/dim] {len(offen)} Module ({sum(m.get("eCTS", 0) for m in offen):.0f} ECTS)
+[dim]○ Offen:[/dim] {len(offen)} Module ({offen_ects:.0f} ECTS)
         """
         console.print(Panel(summary.strip(), title="Zusammenfassung", border_style="cyan"))
 
@@ -1149,7 +1152,7 @@ def analyze_captures(
             # Format timestamp to readable date
             ts = event.get("timestamp")
             if ts:
-                dt = datetime.fromtimestamp(ts)
+                dt = datetime.fromtimestamp(ts, tz=UTC)
                 date_formatted = dt.strftime("%a, %d.%m.%Y %H:%M")
             else:
                 date_formatted = event.get("date_text", "?")
@@ -1228,7 +1231,10 @@ def fetch_all_online(
                     response = client.execute_named_query("myStudentData")
                     if response.data and "myStudentData" in response.data:
                         all_data["graphql"]["student"] = response.data["myStudentData"]
-                        name = f"{response.data['myStudentData'].get('vorname', '')} {response.data['myStudentData'].get('nachname', '')}"
+                        student_data = response.data["myStudentData"]
+                        vorname = student_data.get("vorname", "")
+                        nachname = student_data.get("nachname", "")
+                        name = f"{vorname} {nachname}"
                         console.print(f"[green]✓ Student: {name}[/green]")
                     elif response.has_errors:
                         console.print(f"[yellow]⚠ Studentendaten: {response.errors}[/yellow]")
@@ -1568,7 +1574,9 @@ def get_graphql_token_auto(
                     aud = payload.get("aud", "")
                     if aud == target_audience:
                         captured_token = token
-                        console.print("[green]✓ GraphQL token mit korrekter Audience gefunden![/green]")
+                        console.print(
+                            "[green]✓ GraphQL token mit korrekter Audience gefunden![/green]"
+                        )
                         console.print(f"  [dim]aud: {aud}[/dim]")
             except Exception:
                 logger.debug("Failed to decode JWT token", exc_info=True)
@@ -1644,13 +1652,13 @@ def get_graphql_token_auto(
                 if success:
                     console.print()
                     console.print(
-                        "[bold green]✓ GraphQL token erfolgreich extrahiert und gespeichert![/bold green]"
+                        "[bold green]✓ GraphQL token erfolgreich extrahiert "
+                        "und gespeichert![/bold green]"
                     )
                     console.print()
                     # Show token preview
-                    console.print(
-                        f"[dim]Token (gekürzt): {captured_token[:50]}...{captured_token[-20:]}[/dim]"
-                    )
+                    token_preview = f"{captured_token[:50]}...{captured_token[-20:]}"
+                    console.print(f"[dim]Token (gekürzt): {token_preview}[/dim]")
                     success_count += 1
                 else:
                     console.print("[red]✗ Konnte GraphQL token nicht speichern[/red]")
@@ -1659,7 +1667,9 @@ def get_graphql_token_auto(
                 success = store_secret("moodle_session", captured_moodle_session)
                 if success:
                     console.print()
-                    console.print("[bold green]✓ Moodle session erfolgreich gespeichert![/bold green]")
+                    console.print(
+                        "[bold green]✓ Moodle session erfolgreich gespeichert![/bold green]"
+                    )
                     success_count += 1
                 else:
                     console.print("[red]✗ Konnte Moodle session nicht speichern[/red]")
@@ -1706,7 +1716,10 @@ def get_graphql_token_auto(
 @app.command("exams")
 def show_comprehensive_exams(
     semester: int = typer.Option(
-        None, "--semester", "-s", help="Filter by specific semester number (default: current semester)"
+        None,
+        "--semester",
+        "-s",
+        help="Filter by specific semester number (default: current semester)",
     ),
     include_completed: bool = typer.Option(
         False, "--completed", "-c", help="Include completed modules"
@@ -1733,12 +1746,18 @@ def show_comprehensive_exams(
         kolping exams --analyze
     """
 
-    console.print("[bold cyan]📚 Kolping Study Cockpit - Prüfungstermine & Leistungsübersicht[/bold cyan]")
+    console.print(
+        "[bold cyan]📚 Kolping Study Cockpit - "
+        "Prüfungstermine & Leistungsübersicht[/bold cyan]"
+    )
     console.print("=" * 70)
 
     # Step 1: Analyze endpoints if requested
     if analyze_endpoints:
-        console.print("\n[bold yellow]🔍 SCHRITT 1: Analyse aller verfügbaren Endpunkte[/bold yellow]")
+        console.print(
+            "\n[bold yellow]🔍 SCHRITT 1: "
+            "Analyse aller verfügbaren Endpunkte[/bold yellow]"
+        )
         console.print("[dim]Teste alle bekannten GraphQL Queries...[/dim]\n")
 
         try:
@@ -1770,7 +1789,10 @@ def show_comprehensive_exams(
                             response = client.execute_named_query(query_name, simple=True)
                             if response.has_errors:
                                 status = "[yellow]⚠[/yellow]"
-                                result = f"Fehler: {response.errors[0].message if response.errors else 'Unknown'}"
+                                error_msg = (
+                                    response.errors[0].message if response.errors else "Unknown"
+                                )
+                                result = f"Fehler: {error_msg}"
                             elif response.data:
                                 # Count results
                                 data_key = list(response.data.keys())[0] if response.data else None
@@ -1799,12 +1821,13 @@ def show_comprehensive_exams(
             console.print(f"[red]✗ Analyse fehlgeschlagen: {e}[/red]\n")
 
     # Step 2: Fetch comprehensive exam data
-    console.print("[bold yellow]🎓 SCHRITT 2: Lade Prüfungsdaten und Modulübersicht[/bold yellow]\n")
+    console.print(
+        "[bold yellow]🎓 SCHRITT 2: "
+        "Lade Prüfungsdaten und Modulübersicht[/bold yellow]\n"
+    )
 
     grade_data = None
     exam_dates = []
-    all_modules = []
-    enrolled_modules = []
     calendar_events = []
     moodle_courses = []
     errors = []
@@ -1832,7 +1855,8 @@ def show_comprehensive_exams(
                     response = client.execute_named_query("pruefungs", simple=True)
                     if response.data and "pruefungs" in response.data:
                         exam_dates = response.data["pruefungs"]
-                        console.print(f"[green]✓ {len(exam_dates)} Prüfungstermine gefunden[/green]")
+                        exam_count = len(exam_dates)
+                        console.print(f"[green]✓ {exam_count} Prüfungstermine gefunden[/green]")
 
 
     except Exception as e:
@@ -1854,7 +1878,8 @@ def show_comprehensive_exams(
                 else:
                     # Get calendar events
                     calendar_events = client.get_upcoming_deadlines()
-                    console.print(f"[green]✓ {len(calendar_events)} Kalender-Events geladen[/green]")
+                    event_count = len(calendar_events)
+                    console.print(f"[green]✓ {event_count} Kalender-Events geladen[/green]")
 
                     # Get courses
                     moodle_courses = client.get_courses()
@@ -1937,7 +1962,10 @@ def show_comprehensive_exams(
                 # Find exam date for this module
                 exam_date = "Siehe Kalender"
                 if modul_id and exam_dates:
-                    matching_exam = next((e for e in exam_dates if str(e.get("modulId")) == str(modul_id)), None)
+                    matching_exam = next(
+                        (e for e in exam_dates if str(e.get("modulId")) == str(modul_id)),
+                        None,
+                    )
                     if matching_exam:
                         datum = matching_exam.get("datum", "")
                         uhrzeit = matching_exam.get("uhrzeit", "")
@@ -1976,8 +2004,9 @@ def show_comprehensive_exams(
         # Show open modules with requirements
         if offen:
             console.print("\n")
+            semester_info = f" (Semester {display_semester})" if display_semester else ""
             table = Table(
-                title=f"📝 OFFENE MODULE{f' (Semester {display_semester})' if display_semester else ''}",
+                title=f"📝 OFFENE MODULE{semester_info}",
                 title_style="bold",
             )
             table.add_column("Modul", style="bold", max_width=40)
@@ -2053,7 +2082,6 @@ def show_comprehensive_exams(
                 table.add_column("ECTS", justify="right", width=5)
 
                 for m in sorted(bestanden + anerkannt, key=lambda x: x.get("semester", 99)):
-                    status_marker = "anerkannt" if m in anerkannt else "bestanden"
                     table.add_row(
                         m.get("modulbezeichnung", "?")[:40],
                         str(m.get("semester", "?")),
@@ -2109,7 +2137,8 @@ def show_comprehensive_exams(
         table.add_column("Link", style="cyan", max_width=30)
 
         for course in moodle_courses[:20]:
-            short_url = course.url[:30] + "..." if course.url and len(course.url) > 30 else (course.url or "")
+            url = course.url or ""
+            short_url = url[:30] + "..." if url and len(url) > 30 else url
             table.add_row(
                 course.name[:50],
                 short_url,
@@ -2129,19 +2158,61 @@ def show_comprehensive_exams(
 def _get_requirements_for_pruefungsform(pruefungsform: str) -> str:
     """Get description of requirements for a given assessment type."""
     requirements_map = {
-        "Klausur": "  • Schriftliche Prüfung im Prüfungszeitraum\n  • Anmeldung erforderlich\n  • Prüfungsvorbereitung empfohlen",
-        "Lerntagebuch": "  • Regelmäßige Reflexion über Lernprozess\n  • Dokumentation in vorgegebenem Format\n  • Abgabe über Moodle",
-        "Präsentation": "  • Vorbereitung einer Präsentation (10-20 Min.)\n  • Handout oder Folien\n  • Präsentation vor Kurs/Dozent",
-        "Seminararbeit": "  • Schriftliche Ausarbeitung (10-15 Seiten)\n  • Wissenschaftliche Zitierweise\n  • Abgabe als PDF über Moodle",
-        "E-Portfolio": "  • Digitale Sammlung von Lernartefakten\n  • Reflexion über Lernfortschritt\n  • Online-Präsentation",
-        "Mündliche Prüfung": "  • Terminvereinbarung mit Prüfer\n  • Vorbereitung auf Prüfungsgespräch\n  • Ca. 20-30 Minuten",
-        "Anerkennung": "  • Nachweis über Praxisphase\n  • Bestätigung vom Arbeitgeber\n  • Einreichung über Studierendensekretariat",
-        "Exposé": "  • Forschungsplan für Abschlussarbeit\n  • 3-5 Seiten\n  • Einreichung beim Betreuer",
-        "Bachelorthesis & Kolloquium": "  • Wissenschaftliche Arbeit (40-60 Seiten)\n  • Kolloquium (30 Min. Verteidigung)\n  • Anmeldung und Themenfindung",
-        "Praxistransferbericht": "  • Bericht über Praxisphase (10-15 Seiten)\n  • Reflexion der praktischen Tätigkeit\n  • Abgabe über Moodle",
+        "Klausur": (
+            "  • Schriftliche Prüfung im Prüfungszeitraum\n"
+            "  • Anmeldung erforderlich\n"
+            "  • Prüfungsvorbereitung empfohlen"
+        ),
+        "Lerntagebuch": (
+            "  • Regelmäßige Reflexion über Lernprozess\n"
+            "  • Dokumentation in vorgegebenem Format\n"
+            "  • Abgabe über Moodle"
+        ),
+        "Präsentation": (
+            "  • Vorbereitung einer Präsentation (10-20 Min.)\n"
+            "  • Handout oder Folien\n"
+            "  • Präsentation vor Kurs/Dozent"
+        ),
+        "Seminararbeit": (
+            "  • Schriftliche Ausarbeitung (10-15 Seiten)\n"
+            "  • Wissenschaftliche Zitierweise\n"
+            "  • Abgabe als PDF über Moodle"
+        ),
+        "E-Portfolio": (
+            "  • Digitale Sammlung von Lernartefakten\n"
+            "  • Reflexion über Lernfortschritt\n"
+            "  • Online-Präsentation"
+        ),
+        "Mündliche Prüfung": (
+            "  • Terminvereinbarung mit Prüfer\n"
+            "  • Vorbereitung auf Prüfungsgespräch\n"
+            "  • Ca. 20-30 Minuten"
+        ),
+        "Anerkennung": (
+            "  • Nachweis über Praxisphase\n"
+            "  • Bestätigung vom Arbeitgeber\n"
+            "  • Einreichung über Studierendensekretariat"
+        ),
+        "Exposé": (
+            "  • Forschungsplan für Abschlussarbeit\n"
+            "  • 3-5 Seiten\n"
+            "  • Einreichung beim Betreuer"
+        ),
+        "Bachelorthesis & Kolloquium": (
+            "  • Wissenschaftliche Arbeit (40-60 Seiten)\n"
+            "  • Kolloquium (30 Min. Verteidigung)\n"
+            "  • Anmeldung und Themenfindung"
+        ),
+        "Praxistransferbericht": (
+            "  • Bericht über Praxisphase (10-15 Seiten)\n"
+            "  • Reflexion der praktischen Tätigkeit\n"
+            "  • Abgabe über Moodle"
+        ),
     }
 
-    return requirements_map.get(pruefungsform, "  • Details siehe Modulhandbuch\n  • Informationen auf Moodle")
+    return requirements_map.get(
+        pruefungsform, "  • Details siehe Modulhandbuch\n  • Informationen auf Moodle"
+    )
 
 
 @app.command("extract-token")

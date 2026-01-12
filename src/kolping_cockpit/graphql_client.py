@@ -169,7 +169,12 @@ class KolpingGraphQLClient:
             query { myStudentGradeOverview { grade eCTS currentSemester } }
         """,
         "moduls": """
-            query { moduls { id modulName modulkuerzel ectspunkte semester pruefungsform beschreibung } }
+            query {
+                moduls {
+                    id modulName modulkuerzel ectspunkte semester
+                    pruefungsform beschreibung
+                }
+            }
         """,
         "semesters": """
             query { semesters { id semesterName semesterPeriode } }
