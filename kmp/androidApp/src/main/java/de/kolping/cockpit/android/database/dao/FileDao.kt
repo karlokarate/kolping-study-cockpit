@@ -14,7 +14,7 @@ interface FileDao {
     fun getAllFiles(): Flow<List<FileEntity>>
     
     @Query("SELECT * FROM files WHERE moduleId = :moduleId ORDER BY fileName ASC")
-    fun getFilesByModule(moduleId: String): Flow<List<FileEntity>>
+    fun getFilesByModule(moduleId: String?): Flow<List<FileEntity>>
     
     @Query("SELECT * FROM files WHERE courseId = :courseId ORDER BY fileName ASC")
     fun getFilesByCourse(courseId: Int): Flow<List<FileEntity>>
@@ -35,7 +35,7 @@ interface FileDao {
     suspend fun deleteFile(file: FileEntity)
     
     @Query("DELETE FROM files WHERE moduleId = :moduleId")
-    suspend fun deleteFilesByModule(moduleId: String)
+    suspend fun deleteFilesByModule(moduleId: String?)
     
     @Query("DELETE FROM files")
     suspend fun deleteAllFiles()

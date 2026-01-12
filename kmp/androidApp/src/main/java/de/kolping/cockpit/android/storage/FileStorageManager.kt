@@ -80,7 +80,8 @@ class FileStorageManager(private val context: Context) {
      * Save file to module files directory
      * @return File object pointing to the saved file
      */
-    fun saveModuleFile(moduleId: String, fileName: String, inputStream: InputStream): File {
+    fun saveModuleFile(moduleId: String?, fileName: String, inputStream: InputStream): File {
+        requireNotNull(moduleId) { "Module ID cannot be null" }
         val targetFile = File(getModuleFilesDirectory(moduleId), fileName)
         targetFile.outputStream().use { outputStream ->
             inputStream.copyTo(outputStream)
@@ -116,8 +117,10 @@ class FileStorageManager(private val context: Context) {
     /**
      * Delete all files in module directory
      */
-    fun deleteModuleFiles(moduleId: String) {
-        getModuleDirectory(moduleId).deleteRecursively()
+    fun deleteModuleFiles(moduleId: String?) {
+        if (moduleId != null) {
+            getModuleDirectory(moduleId).deleteRecursively()
+        }
     }
     
     /**
@@ -158,17 +161,24 @@ class FileStorageManager(private val context: Context) {
     }
     
     /**
-     * Check if file exists
+     * Check if file exists within sync directory
+     * @param filePath Relative path within sync directory
      */
     fun fileExists(filePath: String): Boolean {
-        return File(filePath).exists()
+        val file = File(syncDir, filePath)
+        return file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)
     }
     
     /**
-     * Get file by path
+     * Get file by relative path within sync directory
+     * @param filePath Relative path within sync directory
      */
     fun getFile(filePath: String): File? {
-        val file = File(filePath)
-        return if (file.exists()) file else null
+        val file = File(syncDir, filePath)
+        return if (file.exists() && file.canonicalPath.startsWith(syncDir.canonicalPath)) {
+            file
+        } else {
+            null
+        }
     }
 }

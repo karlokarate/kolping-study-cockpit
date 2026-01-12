@@ -6,12 +6,15 @@ import androidx.room.PrimaryKey
 /**
  * Room entity for storing downloaded file metadata.
  * Tracks local file storage for PDFs, documents, etc.
+ * 
+ * Note: Files can belong to either a module or a course (or both).
+ * At least one of moduleId or courseId should be set.
  */
 @Entity(tableName = "files")
 data class FileEntity(
     @PrimaryKey
     val fileId: String,
-    val moduleId: String,
+    val moduleId: String? = null,
     val courseId: Int? = null,
     val fileName: String,
     val filePath: String,  // Local file path
