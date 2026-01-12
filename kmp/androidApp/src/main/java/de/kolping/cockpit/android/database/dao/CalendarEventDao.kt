@@ -16,6 +16,9 @@ interface CalendarEventDao {
     @Query("SELECT * FROM calendar_events WHERE timestart >= :startTime AND timestart <= :endTime ORDER BY timestart ASC")
     fun getEventsByDateRange(startTime: Long, endTime: Long): Flow<List<CalendarEventEntity>>
     
+    @Query("SELECT * FROM calendar_events WHERE timestart >= :startTime ORDER BY timestart ASC LIMIT :limit")
+    fun getUpcomingEventsWithLimit(startTime: Long, limit: Int): Flow<List<CalendarEventEntity>>
+    
     @Query("SELECT * FROM calendar_events WHERE courseId = :courseId ORDER BY timestart ASC")
     fun getEventsByCourse(courseId: Int): Flow<List<CalendarEventEntity>>
     

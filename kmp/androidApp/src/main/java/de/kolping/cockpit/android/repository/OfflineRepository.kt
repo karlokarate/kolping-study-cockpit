@@ -144,9 +144,17 @@ class OfflineRepository(
     /**
      * Get upcoming events (after current time)
      */
-    fun getUpcomingEvents(): Flow<List<CalendarEventEntity>> {
+    fun getUpcomingEvents(limit: Int = 10): Flow<List<CalendarEventEntity>> {
         val now = System.currentTimeMillis() / 1000 // Convert to Unix timestamp
-        return calendarEventDao.getEventsByDateRange(now, Long.MAX_VALUE)
+        return calendarEventDao.getUpcomingEventsWithLimit(now, limit)
+    }
+    
+    /**
+     * Get modules for current semester (highest semester number)
+     * Returns Flow for reactive updates
+     */
+    fun getCurrentSemesterModules(): Flow<List<ModuleEntity>> {
+        return moduleDao.getAllModules()
     }
     
     // ==================== Utility Methods ====================
