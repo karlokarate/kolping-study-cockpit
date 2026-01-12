@@ -1,9 +1,13 @@
 """CLI interface for Kolping Study Cockpit using Typer and Rich."""
 
+import logging
+
 import typer
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
+
+logger = logging.getLogger(__name__)
 
 # Constants for display formatting
 MODULE_NAME_MAX_LENGTH = 50
@@ -470,7 +474,7 @@ def login_manual() -> None:
 
     Use this in Codespaces or SSH sessions where no GUI is available.
     You'll need to login via browser elsewhere and paste the session cookie.
-    
+
     Priority: Uses KOLPING_* environment variables if available (repo secrets).
     """
     from kolping_cockpit.settings import get_secret_from_env_or_keyring, get_settings, store_secret
@@ -480,22 +484,22 @@ def login_manual() -> None:
     console.print("[bold cyan]Kolping Study Cockpit - Manual Login[/bold cyan]")
     console.print("=" * 50)
     console.print()
-    
+
     # Check if we already have credentials from environment/repo secrets
     existing_moodle = get_secret_from_env_or_keyring("moodle_session")
     existing_graphql = get_secret_from_env_or_keyring("graphql_bearer_token")
-    
+
     if existing_moodle:
         console.print("[green]✓ Moodle session found in environment/repo secrets[/green]")
     if existing_graphql:
         console.print("[green]✓ GraphQL token found in environment/repo secrets[/green]")
-    
+
     if existing_moodle and existing_graphql:
         console.print()
         console.print("[bold green]All credentials already configured from secrets![/bold green]")
         console.print("Use 'kolping status' to verify connection.")
         return
-    
+
     console.print()
     console.print("[yellow]Instructions:[/yellow]")
     console.print("1. Open in your local browser:")
@@ -997,6 +1001,7 @@ def analyze_captures(
                         f"[green]✓ {len(event_divs)} Events gefunden in {html_file.name}[/green]"
                     )
             except Exception:
+                logger.debug(f"Failed to parse events from {html_file.name}", exc_info=True)
                 continue
 
     # Remove duplicates based on timestamp
@@ -1502,16 +1507,16 @@ def get_graphql_token_auto(
     console.print("[bold cyan]🔑 Automatic Token & Session Extraction[/bold cyan]")
     console.print("=" * 50)
     console.print()
-    
+
     # Check for existing credentials from environment
     existing_graphql = get_secret_from_env_or_keyring("graphql_bearer_token")
     existing_moodle = get_secret_from_env_or_keyring("moodle_session")
-    
+
     if existing_graphql:
         console.print("[green]✓ GraphQL token already configured from environment/secrets[/green]")
     if existing_moodle:
         console.print("[green]✓ Moodle session already configured from environment/secrets[/green]")
-    
+
     if existing_graphql and existing_moodle:
         console.print()
         console.print("[bold green]All credentials already configured from secrets![/bold green]")
@@ -1521,7 +1526,7 @@ def get_graphql_token_auto(
         console.print("[dim]  unset KOLPING_GRAPHQL_BEARER_TOKEN[/dim]")
         console.print("[dim]  unset KOLPING_MOODLE_SESSION[/dim]")
         return
-    
+
     console.print("Dieser Befehl öffnet einen Browser und loggt automatisch ein.")
     console.print("Nach erfolgreicher Anmeldung werden Tokens extrahiert.")
     console.print()
@@ -1531,7 +1536,7 @@ def get_graphql_token_auto(
     except ImportError:
         console.print("[red]✗ Playwright nicht installiert![/red]")
         console.print("  Installiere mit: pip install playwright && playwright install chromium")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from None
 
     captured_token: str | None = None
     captured_moodle_session: str | None = None
@@ -1566,7 +1571,7 @@ def get_graphql_token_auto(
                         console.print("[green]✓ GraphQL token mit korrekter Audience gefunden![/green]")
                         console.print(f"  [dim]aud: {aud}[/dim]")
             except Exception:
-                pass  # Ignore decode errors
+                logger.debug("Failed to decode JWT token", exc_info=True)
 
     console.print("[yellow]Starte Browser...[/yellow]")
 
@@ -1619,7 +1624,7 @@ def get_graphql_token_auto(
                     moodle_url = "https://portal.kolping-hochschule.de/my/"
                     page.goto(moodle_url, timeout=30000)
                     time.sleep(5)  # Wait for login redirect if needed
-                    
+
                     # Get cookies
                     cookies = context.cookies()
                     for cookie in cookies:
@@ -1632,7 +1637,7 @@ def get_graphql_token_auto(
 
             # Store captured credentials
             success_count = 0
-            
+
             if captured_token and not existing_graphql:
                 # Store the token
                 success = store_secret("graphql_bearer_token", captured_token)
@@ -1649,7 +1654,7 @@ def get_graphql_token_auto(
                     success_count += 1
                 else:
                     console.print("[red]✗ Konnte GraphQL token nicht speichern[/red]")
-            
+
             if captured_moodle_session and not existing_moodle:
                 success = store_secret("moodle_session", captured_moodle_session)
                 if success:
@@ -1658,7 +1663,7 @@ def get_graphql_token_auto(
                     success_count += 1
                 else:
                     console.print("[red]✗ Konnte Moodle session nicht speichern[/red]")
-            
+
             if success_count == 0:
                 if not captured_token and not existing_graphql:
                     error_msg = "Kein GraphQL Token erfasst"
@@ -1691,7 +1696,7 @@ def get_graphql_token_auto(
                 console.print("[red]✗ Timeout - Seite hat zu lange gebraucht[/red]")
             else:
                 console.print(f"[red]✗ Fehler: {error_msg}[/red]")
-            raise typer.Exit(code=1)
+            raise typer.Exit(code=1) from None
 
         finally:
             context.close()
@@ -1868,7 +1873,7 @@ def show_comprehensive_exams(
     # Step 3: Display comprehensive overview
     if grade_data:
         current_sem = grade_data.get("currentSemester", "Unbekannt")
-        
+
         # Safely parse current semester number
         current_sem_num = None
         if isinstance(current_sem, str) and current_sem.strip():
@@ -2189,9 +2194,9 @@ def extract_token_from_captures() -> None:
                                     if not any(t[0] == token for t in found_tokens):
                                         found_tokens.append((token, aud, str(request_json)))
                             except Exception:
-                                pass
+                                logger.debug("Failed to decode token from request", exc_info=True)
             except Exception:
-                pass
+                logger.debug(f"Failed to read request JSON from {request_json}", exc_info=True)
 
         # Also check request.txt and request.hcy files
         for filename in ["request.txt", "request.hcy"]:
@@ -2217,7 +2222,7 @@ def extract_token_from_captures() -> None:
                             if not any(t[0] == token for t in found_tokens):
                                 found_tokens.append((token, aud, str(request_file)))
                     except Exception:
-                        pass
+                        logger.debug(f"Failed to decode token from {request_file}", exc_info=True)
 
     if not found_tokens:
         console.print("[red]✗ Keine Token in HTTP Captures gefunden[/red]")

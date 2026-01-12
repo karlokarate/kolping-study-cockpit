@@ -1,11 +1,14 @@
 """Environment and configuration management for Kolping Study Cockpit."""
 
+import logging
 import os
 from functools import lru_cache
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class KolpingSettings(BaseSettings):
@@ -148,7 +151,7 @@ def get_secret_from_env_or_keyring(key: str, service: str = "kolping-cockpit") -
         if not isinstance(keyring.get_keyring(), FailKeyring):
             return keyring.get_password(service, key)
     except Exception:
-        pass
+        logger.debug("Keyring not available, falling back to file storage", exc_info=True)
 
     # Fall back to file-based storage
     return _get_secret_from_file(key)
@@ -186,6 +189,7 @@ def _get_secret_from_file(key: str) -> str | None:
             if key in secrets:
                 return secrets.get(key)
         except Exception:
+            logger.debug(f"Failed to read secrets from {secrets_file}", exc_info=True)
             continue
     return None
 
@@ -261,7 +265,7 @@ def store_secret(key: str, value: str, service: str = "kolping-cockpit") -> bool
             keyring.set_password(service, key, value)
             return True
     except Exception:
-        pass
+        logger.debug("Failed to store secret in keyring, falling back to file", exc_info=True)
 
     # Fall back to file storage
     return _store_secret_to_file(key, value)
@@ -289,7 +293,7 @@ def delete_secret(key: str, service: str = "kolping-cockpit") -> bool:
             keyring.delete_password(service, key)
             deleted = True
     except Exception:
-        pass
+        logger.debug("Failed to delete secret from keyring", exc_info=True)
 
     # Also try file storage
     if _delete_secret_from_file(key):

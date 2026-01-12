@@ -1,9 +1,12 @@
 """Authentication module for interactive browser login."""
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from kolping_cockpit.settings import get_settings, store_secret
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -76,7 +79,7 @@ def interactive_login(headless: bool = False) -> LoginResult:
                     if email_input.is_visible(timeout=3000):
                         email_input.fill(settings.username)
                 except Exception:
-                    pass  # Input not found or not visible yet
+                    logger.debug("Email input not found or not visible yet", exc_info=True)
 
             # Wait for user to complete login
             # We detect successful login by checking for Moodle dashboard URL
@@ -101,7 +104,7 @@ def interactive_login(headless: bool = False) -> LoginResult:
                 if user_element.is_visible(timeout=2000):
                     username = user_element.inner_text()
             except Exception:
-                pass
+                logger.debug("Could not extract username from page", exc_info=True)
 
             # Save browser state for future sessions
             context.storage_state(path=str(auth_storage))
