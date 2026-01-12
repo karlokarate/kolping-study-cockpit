@@ -14,6 +14,7 @@ androidx-activity = "1.8.2"
 androidx-datastore = "1.0.0"
 androidx-security = "1.1.0"
 androidx-room = "2.6.1"
+androidx-material = "1.11.0"
 android-pdf-viewer = "1.0.16"
 
 [libraries]
@@ -53,6 +54,7 @@ androidx-lifecycle-viewmodel = { module = "androidx.lifecycle:lifecycle-viewmode
 androidx-lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "androidx-datastore" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "androidx-security" }
+androidx-material = { module = "com.google.android.material:material", version.ref = "androidx-material" }
 
 # Room Database
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "androidx-room" }
