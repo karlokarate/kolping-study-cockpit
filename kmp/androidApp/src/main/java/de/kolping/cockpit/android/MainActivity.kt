@@ -37,6 +37,8 @@ class MainActivity : ComponentActivity() {
 fun KolpingCockpitApp(tokenManager: TokenManager) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Loading) }
     var selectedModuleId by remember { mutableStateOf<String?>(null) }
+    var selectedFilePath by remember { mutableStateOf<String?>(null) }
+    var selectedFileName by remember { mutableStateOf<String?>(null) }
     val isAuthenticated by tokenManager.isAuthenticatedFlow.collectAsState(initial = false)
     
     LaunchedEffect(isAuthenticated) {
@@ -99,7 +101,42 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
                         currentScreen = Screen.Home
                     },
                     onOpenFile = { file ->
-                        // TODO: Implement file opening (PDF viewer, etc.)
+                        if (file.fileType.lowercase() == "pdf") {
+                            selectedFilePath = file.filePath
+                            selectedFileName = file.fileName
+                            currentScreen = Screen.PdfViewer
+                        } else {
+                            // TODO: Handle other file types (open with system app)
+                        }
+                    }
+                )
+            }
+        }
+        
+        Screen.OfflineLibrary -> {
+            OfflineLibraryScreen(
+                onNavigateBack = {
+                    currentScreen = Screen.Home
+                },
+                onOpenFile = { file ->
+                    if (file.fileType.lowercase() == "pdf") {
+                        selectedFilePath = file.filePath
+                        selectedFileName = file.fileName
+                        currentScreen = Screen.PdfViewer
+                    } else {
+                        // TODO: Handle other file types
+                    }
+                }
+            )
+        }
+        
+        Screen.PdfViewer -> {
+            selectedFilePath?.let { filePath ->
+                PdfViewerScreen(
+                    filePath = filePath,
+                    fileName = selectedFileName ?: "PDF Dokument",
+                    onNavigateBack = {
+                        currentScreen = Screen.Home
                     }
                 )
             }
@@ -132,4 +169,6 @@ sealed class Screen {
     object Courses : Screen()
     object Calendar : Screen()
     object ModuleDetail : Screen()
+    object OfflineLibrary : Screen()
+    object PdfViewer : Screen()
 }

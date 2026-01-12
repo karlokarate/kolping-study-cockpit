@@ -91,6 +91,9 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
+    
+    // PDF Viewer
+    implementation(libs.android.pdf.viewer)
 }
 
 // Room schema export location for migration support
