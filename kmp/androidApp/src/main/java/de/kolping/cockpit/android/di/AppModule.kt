@@ -5,6 +5,8 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import de.kolping.cockpit.android.auth.TokenManager
+import de.kolping.cockpit.android.database.KolpingDatabase
+import de.kolping.cockpit.android.storage.FileStorageManager
 import de.kolping.cockpit.android.viewmodel.DashboardViewModel
 import de.kolping.cockpit.android.viewmodel.GradesViewModel
 import de.kolping.cockpit.android.viewmodel.CoursesViewModel
@@ -24,6 +26,19 @@ val appModule = module {
     
     // Token Manager
     single { TokenManager(get()) }
+    
+    // Room Database
+    single { KolpingDatabase.getInstance(get()) }
+    
+    // Database DAOs
+    single { get<KolpingDatabase>().moduleDao() }
+    single { get<KolpingDatabase>().courseDao() }
+    single { get<KolpingDatabase>().fileDao() }
+    single { get<KolpingDatabase>().calendarEventDao() }
+    single { get<KolpingDatabase>().studentProfileDao() }
+    
+    // File Storage Manager
+    single { FileStorageManager(get()) }
     
     // API Clients (singletons that get tokens from Flow)
     single { 
