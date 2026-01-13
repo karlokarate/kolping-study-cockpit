@@ -1361,6 +1361,12 @@ new_files:
           implementation("androidx.compose.ui:ui:1.6.0")
           implementation("androidx.compose.material3:material3:1.2.0")
       }
+  - path: kmp/recorder/app/src/main/res/values/strings.xml
+    content: |2
+      <?xml version="1.0" encoding="utf-8"?>
+      <resources>
+          <string name="app_name">RecorderApp</string>
+      </resources>
   - path: kmp/recorder/app/src/main/AndroidManifest.xml
     content: |2
       <?xml version="1.0" encoding="utf-8"?>
