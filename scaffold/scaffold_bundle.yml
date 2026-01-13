@@ -1031,7 +1031,7 @@ patches:
   diff: |
     --- a/kmp/settings.gradle.kts
     +++ b/kmp/settings.gradle.kts
-    @@ -19,3 +19,6 @@ dependencyResolutionManagement {
+    @@ -20,3 +20,6 @@
      
      include(":shared")
      include(":androidApp")
@@ -1042,7 +1042,7 @@ patches:
   diff: |
     --- a/kmp/androidApp/build.gradle.kts
     +++ b/kmp/androidApp/build.gradle.kts
-    @@ -56,6 +56,8 @@ android {
+    @@ -57,6 +57,8 @@
      
      dependencies {
          implementation(project(":shared"))
@@ -1055,48 +1055,43 @@ patches:
   diff: |
     --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
     +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-    @@ -12,6 +12,7 @@ import de.kolping.cockpit.android.auth.TokenManager
+    @@ -11,6 +11,7 @@
+     import de.kolping.cockpit.android.auth.TokenManager
      import de.kolping.cockpit.android.ui.screens.*
      import de.kolping.cockpit.android.ui.theme.KolpingCockpitTheme
-     import org.koin.android.ext.android.inject
     +import de.kolping.cockpit.mapping.android.ui.RecorderScreen
-     
-     class MainActivity : ComponentActivity() {
-- id: mainactivity_recorder_screen
+     import org.koin.android.ext.android.inject
+- id: mainactivity_homescreen_param
   diff: |
     --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
     +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-    @@ -63,6 +63,10 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
-     
-             Screen.Home -> {
-                 HomeScreen(
-    +                onNavigateToRecorder = {
-    +                    previousScreen = Screen.Home
-    +                    currentScreen = Screen.Recorder
-    +                },
-                     onNavigateToModuleDetail = { moduleId ->
-                         selectedModuleId = moduleId
-                         previousScreen = Screen.Home
+    @@ -64,6 +64,7 @@
+         
+         Screen.Home -> {
+             HomeScreen(
+    +            onNavigateToRecorder = { currentScreen = Screen.Recorder },
+                 onNavigateToModuleDetail = { moduleId ->
+                     selectedModuleId = moduleId
+                     previousScreen = Screen.Home
 - id: mainactivity_recorder_case
   diff: |
     --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
     +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-    @@ -172,6 +172,10 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
-                 )
-             }
+    @@ -142,6 +142,10 @@
+             )
          }
-    +    
+         
     +    Screen.Recorder -> {
     +        RecorderScreen(onBack = { currentScreen = Screen.Home })
     +    }
-     }
-     
-     sealed class Screen {
+    +
+         Screen.PdfViewer -> {
+             selectedFilePath?.let { filePath ->
 - id: mainactivity_screen_sealed
   diff: |
     --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
     +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-    @@ -185,4 +185,5 @@ sealed class Screen {
+    @@ -185,4 +185,5 @@
          object ModuleDetail : Screen()
          object OfflineLibrary : Screen()
          object PdfViewer : Screen()
@@ -1106,7 +1101,8 @@ patches:
   diff: |
     --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
     +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
-    @@ -25,6 +25,7 @@ sealed class Screen {
+    @@ -24,6 +24,7 @@
+     @OptIn(ExperimentalMaterial3Api::class)
      @Composable
      fun HomeScreen(
     +    onNavigateToRecorder: () -> Unit = {},
