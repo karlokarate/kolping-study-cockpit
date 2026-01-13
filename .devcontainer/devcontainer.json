@@ -1,14 +1,23 @@
 {
   "name": "Kolping Study Cockpit",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bullseye",
-
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {},
     "ghcr.io/devcontainers/features/node:1": {
       "version": "lts"
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "17",
+      "installGradle": true,
+      "gradleVersion": "8.5"
+    },
+    "ghcr.io/anthropics/devcontainer-features/android-sdk:1": {
+      "version": "latest",
+      "buildToolsVersion": "34.0.0",
+      "platformVersion": "34",
+      "cmdLineToolsVersion": "latest"
     }
   },
-
   "customizations": {
     "vscode": {
       "extensions": [
@@ -21,7 +30,12 @@
         "redhat.vscode-yaml",
         "tamasfe.even-better-toml",
         "GitHub.copilot",
-        "GitHub.copilot-chat"
+        "GitHub.copilot-chat",
+        "mathiasfrohlich.Kotlin",
+        "fwcd.kotlin",
+        "vscjava.vscode-gradle",
+        "formulahendry.terminal",
+        "humao.rest-client"
       ],
       "settings": {
         "python.defaultInterpreterPath": "/usr/local/bin/python",
@@ -33,30 +47,39 @@
             "source.fixAll": "explicit",
             "source.organizeImports": "explicit"
           }
+        },
+        "github.copilot.enable": {
+          "*": true
+        },
+        "terminal.integrated.env.linux": {
+          "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+          "ANDROID_HOME": "/home/codespace/Android/Sdk"
         }
       }
     },
     "codespaces": {
-      "openFiles": ["README.md"]
+      "openFiles": [
+        "README.md"
+      ]
     }
   },
-
   "containerEnv": {
     "KOLPING_USERNAME": "${localEnv:KOLPING_USERNAME}",
     "KOLPING_PASSWORD": "${localEnv:KOLPING_PASSWORD}",
-    "KOLPING_CLIENT_ID": "${localEnv:KOLPING_CLIENT_ID}"
+    "KOLPING_CLIENT_ID": "${localEnv:KOLPING_CLIENT_ID}",
+    "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+    "ANDROID_HOME": "/home/codespace/Android/Sdk"
   },
-
   "remoteEnv": {
     "KOLPING_USERNAME": "${localEnv:KOLPING_USERNAME}",
     "KOLPING_PASSWORD": "${localEnv:KOLPING_PASSWORD}",
-    "KOLPING_CLIENT_ID": "${localEnv:KOLPING_CLIENT_ID}"
+    "KOLPING_CLIENT_ID": "${localEnv:KOLPING_CLIENT_ID}",
+    "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+    "ANDROID_HOME": "/home/codespace/Android/Sdk",
+    "PATH": "${containerEnv:PATH}:/home/codespace/Android/Sdk/cmdline-tools/latest/bin:/home/codespace/Android/Sdk/platform-tools"
   },
-
-  "postCreateCommand": "pip install -e '.[dev]' && playwright install chromium --with-deps",
-
+  "postCreateCommand": "pip install -e '.[dev]' && playwright install chromium --with-deps && bash .devcontainer/post-create.sh",
   "forwardPorts": [],
-
   "portsAttributes": {
     "8000": {
       "label": "Application",

@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import de.kolping.cockpit.android.database.entities.FileEntity
 import de.kolping.cockpit.android.database.entities.ModuleEntity
 import de.kolping.cockpit.android.repository.OfflineRepository
+import de.kolping.cockpit.android.util.FileUtils
 import kotlinx.coroutines.flow.*
 
 /**
@@ -21,6 +22,12 @@ class ModuleDetailViewModel(
     companion object {
         private const val TAG = "ModuleDetailViewModel"
     }
+    
+    /**
+     * Type alias for FileTypeCategory from FileUtils.
+     * Review Finding Fix: Moved enum to shared utility to avoid cross-ViewModel dependencies.
+     */
+    typealias FileTypeCategory = FileUtils.FileTypeCategory
     
     /**
      * UI state that combines module and files data with proper lifecycle management
@@ -67,52 +74,16 @@ class ModuleDetailViewModel(
     }
     
     /**
-     * Format file size in human-readable format
+     * Format file size in human-readable format.
+     * Review Finding Fix: Delegates to shared FileUtils to avoid code duplication.
      */
-    fun formatFileSize(sizeBytes: Long): String {
-        val kb = 1024.0
-        val mb = kb * 1024
-        val gb = mb * 1024
-        
-        return when {
-            sizeBytes >= gb -> String.format("%.2f GB", sizeBytes / gb)
-            sizeBytes >= mb -> String.format("%.2f MB", sizeBytes / mb)
-            sizeBytes >= kb -> String.format("%.2f KB", sizeBytes / kb)
-            else -> "$sizeBytes B"
-        }
-    }
+    fun formatFileSize(sizeBytes: Long): String = FileUtils.formatFileSize(sizeBytes)
     
     /**
-     * Get file type category based on file extension
+     * Get file type category based on file extension.
+     * Review Finding Fix: Delegates to shared FileUtils to avoid code duplication.
      */
-    fun getFileTypeCategory(fileType: String): FileTypeCategory {
-        return when (fileType.lowercase()) {
-            "pdf" -> FileTypeCategory.PDF
-            "doc", "docx", "odt", "txt", "rtf" -> FileTypeCategory.DOCUMENT
-            "xls", "xlsx", "ods", "csv" -> FileTypeCategory.SPREADSHEET
-            "ppt", "pptx", "odp" -> FileTypeCategory.PRESENTATION
-            "jpg", "jpeg", "png", "gif", "bmp", "svg", "webp" -> FileTypeCategory.IMAGE
-            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> FileTypeCategory.VIDEO
-            "mp3", "wav", "ogg", "m4a", "flac", "aac" -> FileTypeCategory.AUDIO
-            "zip", "rar", "7z", "tar", "gz", "bz2" -> FileTypeCategory.ARCHIVE
-            else -> FileTypeCategory.OTHER
-        }
-    }
-    
-    /**
-     * File type categories for grouping and icon selection
-     */
-    enum class FileTypeCategory {
-        PDF,
-        DOCUMENT,
-        SPREADSHEET,
-        PRESENTATION,
-        IMAGE,
-        VIDEO,
-        AUDIO,
-        ARCHIVE,
-        OTHER
-    }
+    fun getFileTypeCategory(fileType: String): FileTypeCategory = FileUtils.getFileTypeCategory(fileType)
     
     /**
      * UI State for ModuleDetailScreen
