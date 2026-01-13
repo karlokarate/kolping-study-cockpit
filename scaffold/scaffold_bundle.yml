@@ -1411,6 +1411,7 @@ patches:
            // Kotlin
            implementation(libs.kotlin.stdlib)
 
+
   # Patch 3: Add RecorderScreen import after org.koin import (line 14)
   - id: mainactivity_import
     diff: |
@@ -1435,6 +1436,7 @@ patches:
                    onNavigateToModuleDetail = { moduleId ->
                        selectedModuleId = moduleId
                        previousScreen = Screen.Home
+
 
   # Patch 5: Add Screen.Recorder case after Screen.OfflineLibrary (before PdfViewer, ~line 143-144)
   - id: mainactivity_recorder_case
@@ -1477,6 +1479,7 @@ patches:
            onNavigateToModuleDetail: (String) -> Unit = {},
            onNavigateToCalendar: () -> Unit = {},
            onNavigateToOfflineLibrary: () -> Unit = {},
+
 
   # Patch 8: Add onRecorderClick param to HomeContent signature (line 126-137)
   - id: homecontent_recorder_param
@@ -1522,7 +1525,7 @@ patches:
       +    // Recorder / Mapping button
       +    item {
       +        TextButton(onClick = onRecorderClick) {
-      +            Text("🎯 Recorder / Mapping")
+      +            Text("Recorder / Mapping")
       +        }
       +    }
            
