@@ -118,6 +118,7 @@ new_files:
           abstract val tsEpochMs: Long
 
           @Serializable
+          @kotlinx.serialization.SerialName("navigation")
           data class Navigation(
               override val tsEpochMs: Long,
               val url: String,
@@ -125,6 +126,7 @@ new_files:
           ) : Event()
 
           @Serializable
+          @kotlinx.serialization.SerialName("network_request")
           data class NetworkRequest(
               override val tsEpochMs: Long,
               val callId: CallId,
@@ -135,6 +137,7 @@ new_files:
           ) : Event()
 
           @Serializable
+          @kotlinx.serialization.SerialName("network_response")
           data class NetworkResponse(
               override val tsEpochMs: Long,
               val callId: CallId,
@@ -145,6 +148,7 @@ new_files:
           ) : Event()
 
           @Serializable
+          @kotlinx.serialization.SerialName("click")
           data class Click(
               override val tsEpochMs: Long,
               val cssPath: String,
@@ -152,6 +156,7 @@ new_files:
           ) : Event()
 
           @Serializable
+          @kotlinx.serialization.SerialName("marker")
           data class Marker(
               override val tsEpochMs: Long,
               val name: String,
@@ -201,7 +206,7 @@ new_files:
                   .filterNot { it.first in volatileParams }
                   .sortedBy { it.first }
                   .joinToString("&") { "${it.first}=${it.second}" }
-              return if (query.isEmpty()) base else "$base?$params"
+              return if (params.isEmpty()) base else "$base?$params"
           }
 
           fun computeNodeSignature(url: String, graphqlOps: List<String>, ajaxMethods: List<String>): String {
