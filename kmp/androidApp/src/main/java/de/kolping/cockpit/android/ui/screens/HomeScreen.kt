@@ -132,6 +132,7 @@ private fun HomeContent(
     isSyncing: Boolean,
     onSyncClick: () -> Unit,
     onModuleClick: (String) -> Unit,
+    onRecorderClick: () -> Unit,
     onEventClick: () -> Unit,
     formatLastSync: (Long) -> String
 ) {
