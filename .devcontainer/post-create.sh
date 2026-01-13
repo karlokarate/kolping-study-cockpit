@@ -7,6 +7,13 @@ set +e
 echo "🚀 Setting up Kolping Study Cockpit Development Environment..."
 
 # =====================================================
+# PATH SETUP (fix pip script warnings)
+# =====================================================
+export PATH="$HOME/.local/bin:$PATH"
+echo "export PATH=\"\$HOME/.local/bin:\$PATH\"" >> ~/.bashrc
+echo "✅ PATH includes ~/.local/bin"
+
+# =====================================================
 # JAVA (should be installed by devcontainer feature)
 # =====================================================
 echo "☕ Configuring Java..."
@@ -78,46 +85,26 @@ echo "sdk.dir=$HOME/Android/Sdk" > /workspaces/kolping-study-cockpit/kmp/local.p
 # =====================================================
 # PYTHON ENVIRONMENT
 # =====================================================
-echo "🐍 Setting up Python virtual environment..."
-cd /workspaces/kolping-study-cockpit
-if [ ! -d ".venv" ]; then
-    python3 -m venv .venv
+echo "🐍 Python environment..."
+if [ -d "/workspaces/kolping-study-cockpit/.venv" ]; then
+    echo "✅ Virtual environment exists"
+else
+    python3 -m venv /workspaces/kolping-study-cockpit/.venv
+    echo "✅ Virtual environment created"
 fi
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ".[dev]" || true
 
 # =====================================================
-# USEFUL TOOLS
-# =====================================================
-echo "🛠️ Installing additional tools..."
-sudo apt-get update -qq
-sudo apt-get install -y -qq \
-    tmux \
-    htop \
-    jq \
-    tree \
-    ripgrep \
-    fd-find \
-    bat \
-    2>/dev/null || true
-
-# =====================================================
-# GIT CONFIGURATION
-# =====================================================
-echo "📝 Configuring Git..."
-git config --global pull.rebase true
-git config --global fetch.prune true
-git config --global diff.colorMoved zebra
-
-# =====================================================
-# FINAL
+# SUMMARY
 # =====================================================
 echo ""
-echo "✅ Development environment setup complete!"
+echo "========================================="
+echo "✅ Setup complete!"
+echo "========================================="
+echo "JAVA_HOME: ${JAVA_HOME:-not set}"
+echo "ANDROID_HOME: $ANDROID_HOME"
+echo "Python: $(python3 --version 2>/dev/null || echo 'not found')"
 echo ""
-echo "Available commands:"
-echo "  ./kmp/gradlew :androidApp:assembleDebug  - Build Android app"
-echo "  pytest                                    - Run Python tests"
-echo "  kolping --help                           - CLI help"
-echo ""
+echo "Next steps:"
+echo "  1. Source bashrc: source ~/.bashrc"
+echo "  2. Build Android: cd kmp && ./gradlew :androidApp:assembleDebug"
+echo "========================================="

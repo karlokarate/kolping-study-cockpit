@@ -70,9 +70,9 @@
     "KOLPING_CLIENT_ID": "${localEnv:KOLPING_CLIENT_ID}",
     "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
     "ANDROID_HOME": "/home/codespace/Android/Sdk",
-    "PATH": "${containerEnv:PATH}:/home/codespace/Android/Sdk/cmdline-tools/latest/bin:/home/codespace/Android/Sdk/platform-tools"
+    "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin:/home/codespace/.local/bin:/home/codespace/Android/Sdk/cmdline-tools/latest/bin:/home/codespace/Android/Sdk/platform-tools"
   },
-  "postCreateCommand": "pip install -e '.[dev]' && playwright install chromium --with-deps && bash .devcontainer/post-create.sh",
+  "postCreateCommand": "export PATH=$HOME/.local/bin:$PATH && pip install -e '.[dev]' && $HOME/.local/bin/playwright install chromium --with-deps || playwright install chromium --with-deps && bash .devcontainer/post-create.sh",
   "forwardPorts": [],
   "portsAttributes": {
     "8000": {
