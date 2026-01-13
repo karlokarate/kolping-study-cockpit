@@ -128,6 +128,56 @@ class OfflineLibraryViewModel(
     }
     
     /**
+     * Refresh offline library
+     */
+    fun refresh() {
+        // Trigger a refresh by re-collecting the flow
+        // The flow will automatically re-emit when the database changes
+        // This is a no-op since we're using reactive flows
+    }
+    
+    /**
+     * Format file size in human-readable format
+     */
+    fun formatFileSize(sizeBytes: Long): String {
+        val kb = 1024.0
+        val mb = kb * 1024
+        val gb = mb * 1024
+        
+        return when {
+            sizeBytes >= gb -> String.format("%.2f GB", sizeBytes / gb)
+            sizeBytes >= mb -> String.format("%.2f MB", sizeBytes / mb)
+            sizeBytes >= kb -> String.format("%.2f KB", sizeBytes / kb)
+            else -> "$sizeBytes B"
+        }
+    }
+    
+    /**
+     * Format download date in human-readable format
+     */
+    fun formatDownloadDate(timestamp: Long): String {
+        val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMAN)
+        return sdf.format(java.util.Date(timestamp))
+    }
+    
+    /**
+     * Get file type category based on file extension
+     */
+    fun getFileTypeCategory(fileType: String): ModuleDetailViewModel.FileTypeCategory {
+        return when (fileType.lowercase()) {
+            "pdf" -> ModuleDetailViewModel.FileTypeCategory.PDF
+            "doc", "docx", "odt", "txt", "rtf" -> ModuleDetailViewModel.FileTypeCategory.DOCUMENT
+            "xls", "xlsx", "ods", "csv" -> ModuleDetailViewModel.FileTypeCategory.SPREADSHEET
+            "ppt", "pptx", "odp" -> ModuleDetailViewModel.FileTypeCategory.PRESENTATION
+            "jpg", "jpeg", "png", "gif", "bmp", "svg", "webp" -> ModuleDetailViewModel.FileTypeCategory.IMAGE
+            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> ModuleDetailViewModel.FileTypeCategory.VIDEO
+            "mp3", "wav", "ogg", "m4a", "flac", "aac" -> ModuleDetailViewModel.FileTypeCategory.AUDIO
+            "zip", "rar", "7z", "tar", "gz", "bz2" -> ModuleDetailViewModel.FileTypeCategory.ARCHIVE
+            else -> ModuleDetailViewModel.FileTypeCategory.OTHER
+        }
+    }
+    
+    /**
      * UI State for OfflineLibraryScreen
      */
     sealed class OfflineLibraryUiState {

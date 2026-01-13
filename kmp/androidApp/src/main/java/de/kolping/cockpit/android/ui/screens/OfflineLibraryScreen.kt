@@ -1,5 +1,6 @@
 package de.kolping.cockpit.android.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -376,7 +377,6 @@ private fun OfflineFileCard(
     }
 }
 
-@Composable
 private fun getFileTypeIcon(category: ModuleDetailViewModel.FileTypeCategory): ImageVector {
     return when (category) {
         ModuleDetailViewModel.FileTypeCategory.PDF -> Icons.Default.PictureAsPdf

@@ -317,13 +317,15 @@ class SyncManager(
                 
                 // Convert to entities and save
                 val eventEntities = events.mapNotNull { event ->
-                    if (event.id == null || event.name == null) {
+                    val eventId = event.id
+                    val eventName = event.name
+                    if (eventId == null || eventName == null) {
                         return@mapNotNull null
                     }
                     
                     CalendarEventEntity(
-                        id = event.id,
-                        name = event.name,
+                        id = eventId,
+                        name = eventName,
                         description = event.description,
                         eventtype = event.eventtype,
                         timestart = event.timestart ?: 0L,

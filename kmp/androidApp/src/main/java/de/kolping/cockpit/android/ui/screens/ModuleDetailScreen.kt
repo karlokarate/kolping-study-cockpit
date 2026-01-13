@@ -350,7 +350,6 @@ private fun FileCard(
     }
 }
 
-@Composable
 private fun getFileTypeIcon(category: ModuleDetailViewModel.FileTypeCategory): ImageVector {
     return when (category) {
         ModuleDetailViewModel.FileTypeCategory.PDF -> Icons.Default.PictureAsPdf
