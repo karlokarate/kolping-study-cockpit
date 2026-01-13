@@ -1402,7 +1402,8 @@ patches:
     diff: |
       --- a/kmp/androidApp/build.gradle.kts
       +++ b/kmp/androidApp/build.gradle.kts
-      @@ -58,6 +58,8 @@
+      @@ -57,6 +57,8 @@
+       
        dependencies {
            implementation(project(":shared"))
       +    implementation(project(":mapping:core"))
@@ -1416,25 +1417,28 @@ patches:
     diff: |
       --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
       +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-      @@ -14,6 +14,7 @@
+      @@ -13,6 +13,7 @@
+       import de.kolping.cockpit.android.ui.theme.KolpingCockpitTheme
        import org.koin.android.ext.android.inject
        
       +import de.kolping.cockpit.mapping.android.ui.RecorderScreen
        class MainActivity : ComponentActivity() {
+           
+           private val tokenManager: TokenManager by inject()
       
   # Patch 4: Add onNavigateToRecorder param to HomeScreen call (line 67-68)
   - id: mainactivity_homescreen_param
     diff: |
       --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
       +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-      @@ -66,6 +66,7 @@
-           
-           Screen.Home -> {
-               HomeScreen(
-      +            onNavigateToRecorder = { currentScreen = Screen.Recorder },
-                   onNavigateToModuleDetail = { moduleId ->
-                       selectedModuleId = moduleId
-                       previousScreen = Screen.Home
+      @@ -65,6 +65,7 @@
+               
+               Screen.Home -> {
+                   HomeScreen(
+      +                onNavigateToRecorder = { currentScreen = Screen.Recorder },
+                       onNavigateToModuleDetail = { moduleId ->
+                           selectedModuleId = moduleId
+                           previousScreen = Screen.Home
       
 
   # Patch 5: Add Screen.Recorder case after Screen.OfflineLibrary (before PdfViewer, ~line 143-144)
@@ -1442,17 +1446,17 @@ patches:
     diff: |
       --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
       +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
-      @@ -143,6 +143,10 @@
-               )
-           }
-           
-      +    Screen.Recorder -> {
-      +        RecorderScreen(onBack = { currentScreen = Screen.Home })
-      +    }
+      @@ -142,6 +142,10 @@
+                   )
+               }
+               
+      +        Screen.Recorder -> {
+      +            RecorderScreen(onBack = { currentScreen = Screen.Home })
+      +        }
       +
-           Screen.PdfViewer -> {
-               selectedFilePath?.let { filePath ->
-                   PdfViewerScreen(
+               Screen.PdfViewer -> {
+                   selectedFilePath?.let { filePath ->
+                       PdfViewerScreen(
       
   # Patch 6: Add Screen.Recorder object to sealed class (line 188-190)
   - id: mainactivity_screen_sealed
@@ -1471,7 +1475,8 @@ patches:
     diff: |
       --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
       +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
-      @@ -25,6 +25,7 @@
+      @@ -24,6 +24,7 @@
+       @OptIn(ExperimentalMaterial3Api::class)
        @Composable
        fun HomeScreen(
       +    onNavigateToRecorder: () -> Unit = {},
@@ -1498,33 +1503,32 @@ patches:
     diff: |
       --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
       +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
-      @@ -70,6 +70,7 @@
-                           isSyncing = syncState is HomeViewModel.SyncState.Syncing,
-                           onSyncClick = { viewModel.startSync() },
-                           onModuleClick = onNavigateToModuleDetail,
-      +                    onRecorderClick = onNavigateToRecorder,
-                           onEventClick = { onNavigateToCalendar() },
-                           formatLastSync = viewModel::formatLastSync
-                       )
+      @@ -71,6 +71,7 @@
+                               isSyncing = syncState is HomeViewModel.SyncState.Syncing,
+                               onSyncClick = { viewModel.startSync() },
+                               onModuleClick = onNavigateToModuleDetail,
+      +                        onRecorderClick = onNavigateToRecorder,
+                               onEventClick = { onNavigateToCalendar() },
+                               formatLastSync = viewModel::formatLastSync
+                           )
       
   # Patch 10: Add Recorder button after SyncButton in HomeContent (line 177-183)
   - id: homescreen_recorder_button
     diff: |
       --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
       +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
-      @@ -177,6 +177,14 @@
-               SyncButton(
-                   lastSyncText = formatLastSync(lastSyncTimestamp),
-                   onSyncClick = onSyncClick,
-                   enabled = !isSyncing
-               )
-           }
-      +
+      @@ -179,6 +179,13 @@
+                       enabled = !isSyncing
+                   )
+               }
+      +    
       +    // Recorder / Mapping button
       +    item {
       +        TextButton(onClick = onRecorderClick) {
       +            Text("Recorder / Mapping")
       +        }
       +    }
-                 
-           # Current semester modules
+               
+               // Current semester modules
+               if (modules.isNotEmpty()) {
+
