@@ -10,12 +10,6 @@
       "version": "17",
       "installGradle": true,
       "gradleVersion": "8.5"
-    },
-    "ghcr.io/anthropics/devcontainer-features/android-sdk:1": {
-      "version": "latest",
-      "buildToolsVersion": "34.0.0",
-      "platformVersion": "34",
-      "cmdLineToolsVersion": "latest"
     }
   },
   "customizations": {
