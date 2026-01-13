@@ -20,3 +20,6 @@ dependencyResolutionManagement {
 
 include(":shared")
 include(":androidApp")
+include(":mapping:core")
+include(":mapping:android")
+include(":recorder:app")

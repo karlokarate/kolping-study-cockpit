@@ -24,6 +24,7 @@ import org.koin.androidx.compose.koinViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
+    onNavigateToRecorder: () -> Unit = {},
     onNavigateToModuleDetail: (String) -> Unit = {},
     onNavigateToCalendar: () -> Unit = {},
     onNavigateToOfflineLibrary: () -> Unit = {},
@@ -71,6 +72,7 @@ fun HomeScreen(
                         isSyncing = syncState is HomeViewModel.SyncState.Syncing,
                         onSyncClick = { viewModel.startSync() },
                         onModuleClick = onNavigateToModuleDetail,
+                        onRecorderClick = onNavigateToRecorder,
                         onEventClick = { onNavigateToCalendar() },
                         formatLastSync = viewModel::formatLastSync
                     )
@@ -132,6 +134,7 @@ private fun HomeContent(
     isSyncing: Boolean,
     onSyncClick: () -> Unit,
     onModuleClick: (String) -> Unit,
+    onRecorderClick: () -> Unit,
     onEventClick: () -> Unit,
     formatLastSync: (Long) -> String
 ) {
@@ -179,6 +182,13 @@ private fun HomeContent(
                 enabled = !isSyncing
             )
         }
+    
+    // Recorder / Mapping button
+    item {
+        TextButton(onClick = onRecorderClick) {
+            Text("Recorder / Mapping")
+        }
+    }
         
         // Current semester modules
         if (modules.isNotEmpty()) {
