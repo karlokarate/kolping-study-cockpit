@@ -58,7 +58,6 @@ language: de
 # Auto-commit behavior
 auto_commit: true
 commit_style: conventional
-
 # Firewall allowlist for Copilot Coding Agent
 # Add these URLs in repository settings:
 # - dl.google.com (Android SDK)
