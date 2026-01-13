@@ -17,6 +17,7 @@ import de.kolping.cockpit.mapping.android.web.RecorderWebViewClient
 import de.kolping.cockpit.mapping.core.CaptureFilters
 import de.kolping.cockpit.mapping.core.Event
 
+@OptIn(ExperimentalMaterial3Api::class)
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 fun RecorderScreen(
