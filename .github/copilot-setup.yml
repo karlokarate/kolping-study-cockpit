@@ -1,0 +1,67 @@
+# Copilot Setup Configuration
+# This file configures the Copilot Coding Agent for this repository
+
+version: 1
+
+# Allowed tools and capabilities
+tools:
+  terminal: true
+  file_edit: true
+  file_create: true
+  file_delete: true
+  git: true
+  github_api: true
+
+# File access patterns (all files allowed)
+files:
+  include:
+    - "**/*"
+  exclude:
+    - ".git/**"
+
+# Allowed commands
+commands:
+  allow:
+    - "git *"
+    - "gh *"
+    - "python *"
+    - "pip *"
+    - "pytest *"
+    - "ruff *"
+    - "gradle *"
+    - "./gradlew *"
+    - "npm *"
+    - "node *"
+    - "apt-get *"
+    - "sudo apt-get *"
+    - "curl *"
+    - "wget *"
+    - "chmod *"
+    - "mkdir *"
+    - "rm *"
+    - "mv *"
+    - "cp *"
+    - "cat *"
+    - "ls *"
+    - "cd *"
+    - "export *"
+    - "source *"
+    - "tmux *"
+    - "htop"
+    - "top *"
+    - "pkill *"
+    - "kill *"
+
+# Language preferences
+language: de
+
+# Auto-commit behavior
+auto_commit: true
+commit_style: conventional
+
+# Firewall allowlist for Copilot Coding Agent
+# Add these URLs in repository settings:
+# - dl.google.com (Android SDK)
+# - services.gradle.org (Gradle)
+# - repo.maven.apache.org (Maven)
+# - plugins.gradle.org (Gradle plugins)

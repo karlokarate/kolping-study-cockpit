@@ -1,0 +1,97 @@
+{
+  // =====================================================
+  // COPILOT - Maximale Berechtigungen
+  // =====================================================
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": true,
+    "markdown": true,
+    "yaml": true,
+    "json": true,
+    "jsonc": true,
+    "kotlin": true,
+    "java": true,
+    "python": true,
+    "xml": true,
+    "gradle": true,
+    "properties": true,
+    "shellscript": true,
+    "dockerfile": true
+  },
+  "github.copilot.editor.enableAutoCompletions": true,
+  "github.copilot.chat.localeOverride": "de",
+  
+  // Chat & Agent Einstellungen
+  "chat.commandCenter.enabled": true,
+  "chat.editor.fontFamily": "monospace",
+  "chat.agent.enabled": true,
+  "chat.agent.maxRequests": 100,
+  
+  // =====================================================
+  // TERMINAL - Voller Zugriff
+  // =====================================================
+  "terminal.integrated.defaultProfile.linux": "bash",
+  "terminal.integrated.allowChords": true,
+  "terminal.integrated.enablePersistentSessions": true,
+  "terminal.integrated.persistentSessionReviveProcess": "always",
+  "terminal.integrated.shellIntegration.enabled": true,
+  "terminal.integrated.env.linux": {
+    "JAVA_HOME": "/usr/lib/jvm/java-17-openjdk-amd64",
+    "ANDROID_HOME": "/home/codespace/Android/Sdk",
+    "PATH": "${env:PATH}:/home/codespace/Android/Sdk/cmdline-tools/latest/bin:/home/codespace/Android/Sdk/platform-tools"
+  },
+
+  // =====================================================
+  // EDITOR - Automatisierung
+  // =====================================================
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll": "explicit",
+    "source.organizeImports": "explicit"
+  },
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+
+  // =====================================================
+  // PYTHON
+  // =====================================================
+  "python.defaultInterpreterPath": "/workspaces/kolping-study-cockpit/.venv/bin/python",
+  "python.analysis.typeCheckingMode": "standard",
+  "python.analysis.autoImportCompletions": true,
+  "python.analysis.completeFunctionParens": true,
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true
+  },
+
+  // =====================================================
+  // KOTLIN / ANDROID
+  // =====================================================
+  "[kotlin]": {
+    "editor.defaultFormatter": "mathiasfrohlich.Kotlin",
+    "editor.formatOnSave": true
+  },
+  "kotlin.languageServer.enabled": true,
+  
+  // =====================================================
+  // GIT
+  // =====================================================
+  "git.autofetch": true,
+  "git.confirmSync": false,
+  "git.enableSmartCommit": true,
+  "git.postCommitCommand": "push",
+
+  // =====================================================
+  // DATEIEN - Voller Zugriff
+  // =====================================================
+  "files.watcherExclude": {
+    "**/build/**": true,
+    "**/.gradle/**": true,
+    "**/node_modules/**": true
+  },
+  "search.exclude": {
+    "**/build": true,
+    "**/.gradle": true,
+    "**/node_modules": true
+  }
+}
