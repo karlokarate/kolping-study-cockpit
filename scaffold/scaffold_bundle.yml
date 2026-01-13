@@ -218,16 +218,26 @@ new_files:
 
           fun extractGraphqlOperationName(body: String?): String? {
               if (body == null) return null
-              val pattern = """"operationName"\s*:\s*"([^"]+)""""
-              val match = Regex(pattern).find(body)
-              return match?.groupValues?.getOrNull(1)
+              val key = "\"operationName\":"
+              val idx = body.indexOf(key)
+              if (idx < 0) return null
+              val start = body.indexOf('"', idx + key.length)
+              if (start < 0) return null
+              val end = body.indexOf('"', start + 1)
+              if (end < 0) return null
+              return body.substring(start + 1, end)
           }
 
           fun extractMoodleAjaxMethod(body: String?): String? {
               if (body == null) return null
-              val pattern = """"methodname"\s*:\s*"([^"]+)""""
-              val match = Regex(pattern).find(body)
-              return match?.groupValues?.getOrNull(1)
+              val key = "\"methodname\":"
+              val idx = body.indexOf(key)
+              if (idx < 0) return null
+              val start = body.indexOf('"', idx + key.length)
+              if (start < 0) return null
+              val end = body.indexOf('"', start + 1)
+              if (end < 0) return null
+              return body.substring(start + 1, end)
           }
       }
 
@@ -235,9 +245,11 @@ new_files:
     content: |
       package de.kolping.cockpit.mapping.core
 
+      import kotlinx.serialization.Serializable
       import kotlinx.serialization.json.*
 
       object SchemaDeriver {
+          @Serializable
           data class FieldSchema(
               val path: String,
               val inferredType: String,
@@ -1205,7 +1217,21 @@ new_files:
           implementation("androidx.compose.material3:material3:1.2.0")
       }
   - path: kmp/recorder/app/src/main/AndroidManifest.xml
-    content: "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n  <application android:label=\"RecorderApp\">\n    <activity android:name=\".RecorderAppActivity\" android:exported=\"true\">\n      <intent-filter>\n        <action android:name=\"android.intent.action.MAIN\" />\n        <category android:name=\"android.intent.category.LAUNCHER\" />\n      </intent-filter>\n    </activity>\n  </application>\n</manifest>\n"
+    content: |2
+      <?xml version="1.0" encoding="utf-8"?>
+      <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+          <uses-permission android:name="android.permission.INTERNET" />
+          <application android:label="RecorderApp">
+              <activity
+                  android:name=".RecorderAppActivity"
+                  android:exported="true">
+                  <intent-filter>
+                      <action android:name="android.intent.action.MAIN" />
+                      <category android:name="android.intent.category.LAUNCHER" />
+                  </intent-filter>
+              </activity>
+          </application>
+      </manifest>
   - path: kmp/recorder/app/src/main/java/de/kolping/cockpit/recorderapp/RecorderAppActivity.kt
     content: "package de.kolping.cockpit.recorderapp\n\nimport android.os.Bundle\nimport androidx.activity.ComponentActivity\nimport androidx.activity.compose.setContent\nimport de.kolping.cockpit.mapping.android.ui.RecorderScreen\n\nclass RecorderAppActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContent {\n            RecorderScreen(onBack = { /* no-op */ })\n        }\n    }\n}\n"
 patches:
