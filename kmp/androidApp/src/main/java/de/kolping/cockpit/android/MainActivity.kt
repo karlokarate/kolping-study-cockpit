@@ -13,6 +13,7 @@ import de.kolping.cockpit.android.ui.screens.*
 import de.kolping.cockpit.android.ui.theme.KolpingCockpitTheme
 import org.koin.android.ext.android.inject
 
+import de.kolping.cockpit.mapping.android.ui.RecorderScreen
 class MainActivity : ComponentActivity() {
     
     private val tokenManager: TokenManager by inject()
@@ -65,6 +66,7 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
         
         Screen.Home -> {
             HomeScreen(
+                onNavigateToRecorder = { currentScreen = Screen.Recorder },
                 onNavigateToModuleDetail = { moduleId ->
                     selectedModuleId = moduleId
                     previousScreen = Screen.Home
@@ -142,6 +144,10 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
             )
         }
         
+        Screen.Recorder -> {
+            RecorderScreen(onBack = { currentScreen = Screen.Home })
+        }
+
         Screen.PdfViewer -> {
             selectedFilePath?.let { filePath ->
                 PdfViewerScreen(
@@ -186,4 +192,5 @@ sealed class Screen {
     object ModuleDetail : Screen()
     object OfflineLibrary : Screen()
     object PdfViewer : Screen()
+    object Recorder : Screen()
 }

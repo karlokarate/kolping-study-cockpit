@@ -57,6 +57,8 @@ android {
 
 dependencies {
     implementation(project(":shared"))
+    implementation(project(":mapping:core"))
+    implementation(project(":mapping:android"))
     
     // Kotlin
     implementation(libs.kotlin.stdlib)
