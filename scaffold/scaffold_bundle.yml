@@ -714,12 +714,12 @@ new_files:
           }
           
           compileOptions {
-              sourceCompatibility = JavaVersion.VERSION_17
-              targetCompatibility = JavaVersion.VERSION_17
+              sourceCompatibility = JavaVersion.VERSION_1_8
+              targetCompatibility = JavaVersion.VERSION_1_8
           }
           
           kotlinOptions {
-              jvmTarget = "17"
+              jvmTarget = "1.8"
           }
           
           buildFeatures {
@@ -751,6 +751,7 @@ new_files:
     content: |
       package de.kolping.cockpit.mapping.android
 
+      import android.util.Log
       import android.webkit.JavascriptInterface
       import de.kolping.cockpit.mapping.core.*
       import kotlinx.serialization.json.Json
@@ -802,7 +803,7 @@ new_files:
                       }
                   }
               } catch (e: Exception) {
-                  // Silently ignore malformed messages
+                  Log.w("JsBridge", "Failed to parse JS message: ${e.message}", e)
               }
           }
       }
@@ -932,7 +933,9 @@ new_files:
                   mapGraph.upsertEdge(edge)
               }
               
-              currentChain = currentChain?.copy(nodeIds = currentChain!!.nodeIds + node.id)
+              currentChain = currentChain?.let { chain ->
+                  chain.copy(nodeIds = chain.nodeIds + node.id)
+              }
               return node
           }
 
@@ -950,34 +953,53 @@ new_files:
       import android.content.Context
       import de.kolping.cockpit.mapping.core.ExportBundle
       import java.io.File
+      import java.io.IOException
 
       class SessionStore(private val context: Context) {
           
-          fun writeBundle(bundle: ExportBundle.BundleContent, exportName: String): String {
-              val baseDir = File(context.filesDir, "mapping_exports/$exportName")
-              baseDir.mkdirs()
+          /**
+           * Writes a bundle to disk with proper error handling.
+           * @return Result containing the export path on success, or IOException on failure
+           */
+          fun writeBundle(bundle: ExportBundle.BundleContent, exportName: String): Result<String> {
+              return try {
+                  val baseDir = File(context.filesDir, "mapping_exports/$exportName")
+                  if (!baseDir.mkdirs() && !baseDir.exists()) {
+                      return Result.failure(IOException("Failed to create directory: ${baseDir.absolutePath}"))
+                  }
 
-              File(baseDir, "map.json").writeText(bundle.mapJson)
+                  File(baseDir, "map.json").writeText(bundle.mapJson)
 
-              val chainsDir = File(baseDir, "chains")
-              chainsDir.mkdirs()
-              bundle.chainsJson.forEach { (id, json) ->
-                  File(chainsDir, "$id.json").writeText(json)
+                  val chainsDir = File(baseDir, "chains")
+                  if (!chainsDir.mkdirs() && !chainsDir.exists()) {
+                      return Result.failure(IOException("Failed to create chains directory"))
+                  }
+                  bundle.chainsJson.forEach { (id, json) ->
+                      File(chainsDir, "$id.json").writeText(json)
+                  }
+
+                  val sessionsDir = File(baseDir, "sessions")
+                  if (!sessionsDir.mkdirs() && !sessionsDir.exists()) {
+                      return Result.failure(IOException("Failed to create sessions directory"))
+                  }
+                  bundle.sessionsJson.forEach { (id, json) ->
+                      File(sessionsDir, "$id.json").writeText(json)
+                  }
+
+                  val schemasDir = File(baseDir, "schemas")
+                  if (!schemasDir.mkdirs() && !schemasDir.exists()) {
+                      return Result.failure(IOException("Failed to create schemas directory"))
+                  }
+                  bundle.schemasJson.forEach { (id, json) ->
+                      File(schemasDir, "$id.json").writeText(json)
+                  }
+
+                  Result.success(baseDir.absolutePath)
+              } catch (e: IOException) {
+                  Result.failure(e)
+              } catch (e: SecurityException) {
+                  Result.failure(IOException("Permission denied", e))
               }
-
-              val sessionsDir = File(baseDir, "sessions")
-              sessionsDir.mkdirs()
-              bundle.sessionsJson.forEach { (id, json) ->
-                  File(sessionsDir, "$id.json").writeText(json)
-              }
-
-              val schemasDir = File(baseDir, "schemas")
-              schemasDir.mkdirs()
-              bundle.schemasJson.forEach { (id, json) ->
-                  File(schemasDir, "$id.json").writeText(json)
-              }
-
-              return baseDir.absolutePath
           }
 
           fun listExports(): List<String> {
@@ -1011,6 +1033,8 @@ new_files:
       import de.kolping.cockpit.mapping.core.CaptureFilters
       import de.kolping.cockpit.mapping.core.Event
 
+      // RecorderScreen uses Material3 composables that are currently marked as experimental.
+      // We deliberately opt in here for early adoption and will revisit when these APIs stabilize.
       @OptIn(ExperimentalMaterial3Api::class)
       @SuppressLint("SetJavaScriptEnabled")
       @Composable
@@ -1018,6 +1042,9 @@ new_files:
           onBack: () -> Unit,
           modifier: Modifier = Modifier,
       ) {
+          // Default URL for the recorder - can be made configurable via parameter if needed
+          val defaultStartUrl = "https://portal.kolping-hochschule.de/my/"
+          
           val context = LocalContext.current
           val controller = remember { RecorderController() }
           val sessionStore = remember { SessionStore(context) }
@@ -1027,9 +1054,7 @@ new_files:
           var currentUrl by remember { mutableStateOf("") }
           var eventCount by remember { mutableIntStateOf(0) }
           var redactEnabled by remember { mutableStateOf(true) }
-          var captureJson by remember { mutableStateOf(true) }
           var statusMessage by remember { mutableStateOf("") }
-          var webViewRef by remember { mutableStateOf<WebView?>(null) }
           var showParentDialog by remember { mutableStateOf(false) }
 
           val chainPoints = remember { mutableStateListOf<de.kolping.cockpit.mapping.core.ChainPoint>() }
@@ -1138,6 +1163,7 @@ new_files:
                           WebView(ctx).apply {
                               settings.javaScriptEnabled = true
                               settings.domStorageEnabled = true
+                              settings.setSafeBrowsingEnabled(true)
                               
                               val bridge = JsBridge(
                                   onNetworkRequest = { event ->
@@ -1165,8 +1191,7 @@ new_files:
                                       }
                                   }
                               )
-                              loadUrl("https://portal.kolping-hochschule.de/my/")
-                              webViewRef = this
+                              loadUrl(defaultStartUrl)
                           }
                       },
                       modifier = Modifier.fillMaxSize().weight(1f)
@@ -1218,9 +1243,26 @@ new_files:
         if(window.__kolpingRecorderInstalled) return;
         window.__kolpingRecorderInstalled = true;
 
-        function genId() { return Date.now() + '_' + Math.random().toString(36).substr(2, 9); }
+        function genId() {
+          if (window.crypto && window.crypto.getRandomValues) {
+            var array = new Uint32Array(4);
+            window.crypto.getRandomValues(array);
+            var randomPart = Array.from(array, function(num) {
+              return num.toString(16);
+            }).join('');
+            return Date.now() + '_' + randomPart;
+          } else {
+            // Fallback for environments without Web Crypto API (non-cryptographic)
+            return Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+          }
+        }
+        
         function post(data) {
-          try { RecorderBridge.postMessage(JSON.stringify(data)); } catch(e) {}
+          try { 
+            RecorderBridge.postMessage(JSON.stringify(data)); 
+          } catch(e) {
+            console.warn('RecorderBridge post failed:', e);
+          }
         }
 
         const origFetch = window.fetch;
@@ -1234,9 +1276,12 @@ new_files:
             const clone = response.clone();
             clone.text().then(function(body) {
               post({ type: 'NET_RES', callId: callId, status: response.status, contentType: response.headers.get('content-type'), body: body.substring(0,10000) });
-            }).catch(function(){});
+            }).catch(function(e){ console.warn('Failed to read response body:', e); });
             return response;
-          } catch(e) { throw e; }
+          } catch(e) { 
+            console.error('Fetch error:', e);
+            throw e; 
+          }
         };
 
         const XHR = XMLHttpRequest.prototype;
@@ -1323,7 +1368,7 @@ new_files:
       <?xml version="1.0" encoding="utf-8"?>
       <manifest xmlns:android="http://schemas.android.com/apk/res/android">
           <uses-permission android:name="android.permission.INTERNET" />
-          <application android:label="RecorderApp">
+          <application android:label="@string/app_name">
               <activity
                   android:name=".RecorderAppActivity"
                   android:exported="true">
@@ -1335,7 +1380,7 @@ new_files:
           </application>
       </manifest>
   - path: kmp/recorder/app/src/main/java/de/kolping/cockpit/recorderapp/RecorderAppActivity.kt
-    content: "package de.kolping.cockpit.recorderapp\n\nimport android.os.Bundle\nimport androidx.activity.ComponentActivity\nimport androidx.activity.compose.setContent\nimport de.kolping.cockpit.mapping.android.ui.RecorderScreen\n\nclass RecorderAppActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        setContent {\n            RecorderScreen(onBack = { /* no-op */ })\n        }\n    }\n}\n"
+    content: "package de.kolping.cockpit.recorderapp\n\nimport android.os.Bundle\nimport androidx.activity.ComponentActivity\nimport androidx.activity.addCallback\nimport androidx.activity.compose.setContent\nimport de.kolping.cockpit.mapping.android.ui.RecorderScreen\n\nclass RecorderAppActivity : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?) {\n        super.onCreate(savedInstanceState)\n        \n        // Handle back button press from the recorder screen\n        onBackPressedDispatcher.addCallback(this) {\n            finish()\n        }\n        \n        setContent {\n            RecorderScreen(onBack = { finish() })\n        }\n    }\n}\n"
 patches:
   # Patch 1: Add new module includes to settings.gradle.kts
   # Line 20 is empty, 21=include(":shared"), 22=include(":androidApp")
