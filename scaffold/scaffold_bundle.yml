@@ -1410,8 +1410,7 @@ patches:
            
            // Kotlin
            implementation(libs.kotlin.stdlib)
-
-
+      
   # Patch 3: Add RecorderScreen import after org.koin import (line 14)
   - id: mainactivity_import
     diff: |
@@ -1422,7 +1421,7 @@ patches:
        
       +import de.kolping.cockpit.mapping.android.ui.RecorderScreen
        class MainActivity : ComponentActivity() {
-
+      
   # Patch 4: Add onNavigateToRecorder param to HomeScreen call (line 67-68)
   - id: mainactivity_homescreen_param
     diff: |
@@ -1436,7 +1435,7 @@ patches:
                    onNavigateToModuleDetail = { moduleId ->
                        selectedModuleId = moduleId
                        previousScreen = Screen.Home
-
+      
 
   # Patch 5: Add Screen.Recorder case after Screen.OfflineLibrary (before PdfViewer, ~line 143-144)
   - id: mainactivity_recorder_case
@@ -1454,7 +1453,7 @@ patches:
            Screen.PdfViewer -> {
                selectedFilePath?.let { filePath ->
                    PdfViewerScreen(
-
+      
   # Patch 6: Add Screen.Recorder object to sealed class (line 188-190)
   - id: mainactivity_screen_sealed
     diff: |
@@ -1479,8 +1478,7 @@ patches:
            onNavigateToModuleDetail: (String) -> Unit = {},
            onNavigateToCalendar: () -> Unit = {},
            onNavigateToOfflineLibrary: () -> Unit = {},
-
-
+      
   # Patch 8: Add onRecorderClick param to HomeContent signature (line 126-137)
   - id: homecontent_recorder_param
     diff: |
@@ -1508,7 +1506,7 @@ patches:
                            onEventClick = { onNavigateToCalendar() },
                            formatLastSync = viewModel::formatLastSync
                        )
-
+      
   # Patch 10: Add Recorder button after SyncButton in HomeContent (line 177-183)
   - id: homescreen_recorder_button
     diff: |
@@ -1528,5 +1526,5 @@ patches:
       +            Text("Recorder / Mapping")
       +        }
       +    }
-           
+                 
            # Current semester modules
