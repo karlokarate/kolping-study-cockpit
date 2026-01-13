@@ -36,6 +36,14 @@ new_files:
       typealias SessionId = String
       typealias CallId = String
 
+      /**
+       * ID generation utility for creating unique identifiers within the application.
+       * 
+       * Note: Uses kotlin.random.Random without explicit seeding, combined with timestamps.
+       * While collisions are unlikely due to timestamp inclusion, IDs are not globally unique
+       * across different app instances. This is acceptable for local session tracking but should
+       * not be relied upon for distributed systems.
+       */
       object Ids {
           private val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 
@@ -58,6 +66,13 @@ new_files:
 
       import kotlinx.serialization.Serializable
 
+      /**
+       * Represents a sequence of web page interactions forming a navigation chain.
+       * @property id Unique identifier for the chain
+       * @property name Human-readable name describing the chain
+       * @property rootNodeId Optional ID of the starting node/page in the chain
+       * @property nodeIds List of all node IDs that make up this chain
+       */
       @Serializable
       data class RecordChain(
           val id: ChainId,
@@ -66,6 +81,16 @@ new_files:
           val nodeIds: List<NodeId> = emptyList(),
       )
 
+      /**
+       * Represents a single point/page in a navigation chain.
+       * @property id Unique identifier for this point
+       * @property name Human-readable name for this page/point
+       * @property url The actual URL of this page
+       * @property urlPattern Optional pattern for matching similar URLs
+       * @property tags Categorization tags for this point
+       * @property signature Computed signature for deduplication based on URL and API calls
+       * @property isHub Whether this point acts as a hub (common navigation point)
+       */
       @Serializable
       data class ChainPoint(
           val id: NodeId,
@@ -77,6 +102,15 @@ new_files:
           val isHub: Boolean = false,
       )
 
+      /**
+       * Represents a directional connection between two points in a navigation chain.
+       * @property id Unique identifier for this edge
+       * @property fromNodeId Source node ID
+       * @property toNodeId Destination node ID
+       * @property createdBy Whether this edge was created manually or automatically
+       * @property reason The reasoning/mechanism that created this edge
+       * @property label Optional descriptive label for the edge
+       */
       @Serializable
       data class ChainEdge(
           val id: EdgeId,
@@ -93,6 +127,17 @@ new_files:
       @Serializable
       enum class EdgeReason { MANUAL_PARENT, HUB_MATCH, NAV_CLICK, CONTEXT_SWITCH, DIRECT_NAV }
 
+      /**
+       * Represents a recording session capturing user interactions and network activity.
+       * @property id Unique identifier for this session
+       * @property chainId Optional ID linking this session to a specific chain
+       * @property startedAtEpochMs Session start timestamp in milliseconds
+       * @property endedAtEpochMs Optional session end timestamp
+       * @property targetUrl Optional target URL being recorded
+       * @property filters Capture filters applied during this session
+       * @property events List of captured events (navigation, clicks, network)
+       * @property calls List of captured HTTP calls with full request/response data
+       */
       @Serializable
       data class RecordingSession(
           val id: SessionId,
@@ -105,6 +150,13 @@ new_files:
           val calls: List<HttpCall> = emptyList(),
       )
 
+      /**
+       * Configuration for what data to capture during recording.
+       * @property hostAllowlist List of host patterns to capture (empty = all)
+       * @property contentTypeAllowlist Content types to capture response bodies for
+       * @property maxBodyBytes Maximum bytes to capture from request/response bodies
+       * @property redact Whether to redact sensitive data like tokens
+       */
       @Serializable
       data class CaptureFilters(
           val hostAllowlist: List<String> = emptyList(),
@@ -113,6 +165,9 @@ new_files:
           val redact: Boolean = true,
       )
 
+      /**
+       * Base class for all capturable events during a recording session.
+       */
       @Serializable
       sealed class Event {
           abstract val tsEpochMs: Long
@@ -166,6 +221,9 @@ new_files:
           enum class Phase { STARTED, FINISHED }
       }
 
+      /**
+       * Represents a complete HTTP call with request and response data.
+       */
       @Serializable
       data class HttpCall(
           val callId: CallId,
@@ -186,6 +244,8 @@ new_files:
   - path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/Signature.kt
     content: |
       package de.kolping.cockpit.mapping.core
+
+      import kotlinx.serialization.json.*
 
       object Signature {
           private val volatileParams = setOf("code", "state", "nonce", "session_state", "t", "_")
@@ -223,26 +283,22 @@ new_files:
 
           fun extractGraphqlOperationName(body: String?): String? {
               if (body == null) return null
-              val key = "\"operationName\":"
-              val idx = body.indexOf(key)
-              if (idx < 0) return null
-              val start = body.indexOf('"', idx + key.length)
-              if (start < 0) return null
-              val end = body.indexOf('"', start + 1)
-              if (end < 0) return null
-              return body.substring(start + 1, end)
+              return try {
+                  val json = Json.parseToJsonElement(body)
+                  json.jsonObject["operationName"]?.jsonPrimitive?.contentOrNull
+              } catch (e: Exception) {
+                  null // Fallback for malformed JSON
+              }
           }
 
           fun extractMoodleAjaxMethod(body: String?): String? {
               if (body == null) return null
-              val key = "\"methodname\":"
-              val idx = body.indexOf(key)
-              if (idx < 0) return null
-              val start = body.indexOf('"', idx + key.length)
-              if (start < 0) return null
-              val end = body.indexOf('"', start + 1)
-              if (end < 0) return null
-              return body.substring(start + 1, end)
+              return try {
+                  val json = Json.parseToJsonElement(body)
+                  json.jsonObject["methodname"]?.jsonPrimitive?.contentOrNull
+              } catch (e: Exception) {
+                  null // Fallback for malformed JSON
+              }
           }
       }
 
@@ -254,6 +310,13 @@ new_files:
       import kotlinx.serialization.json.*
 
       object SchemaDeriver {
+          /**
+           * Threshold for determining when a string field should hint "bytes" storage.
+           * Strings longer than this threshold are considered large enough to benefit from
+           * optimized storage strategies (e.g., external blob storage or compression).
+           */
+          private const val LARGE_STRING_THRESHOLD = 1000
+
           @Serializable
           data class FieldSchema(
               val path: String,
@@ -261,14 +324,18 @@ new_files:
               val storageHint: String = "json"
           )
 
-          fun deriveSchema(jsonString: String): List<FieldSchema> {
+          /**
+           * Derives a schema from JSON string by analyzing field types and structure.
+           * @return Result containing list of field schemas, or error if parsing fails
+           */
+          fun deriveSchema(jsonString: String): Result<List<FieldSchema>> {
               return try {
                   val element = Json.parseToJsonElement(jsonString)
                   val fields = mutableListOf<FieldSchema>()
                   traverse(element, "$", fields)
-                  fields
+                  Result.success(fields)
               } catch (e: Exception) {
-                  emptyList()
+                  Result.failure(e)
               }
           }
 
@@ -295,7 +362,7 @@ new_files:
                           element.doubleOrNull != null -> "number"
                           else -> "null"
                       }
-                      val hint = if (type == "string" && element.content.length > 1000) "bytes" else "string"
+                      val hint = if (type == "string" && element.content.length > LARGE_STRING_THRESHOLD) "bytes" else "string"
                       fields.add(FieldSchema(path, type, hint))
                   }
                   else -> fields.add(FieldSchema(path, "null"))
@@ -311,30 +378,31 @@ new_files:
 
       @Serializable
       data class MapGraph(
-          val nodes: MutableList<ChainPoint> = mutableListOf(),
-          val edges: MutableList<ChainEdge> = mutableListOf(),
+          private val nodeMap: MutableMap<NodeId, ChainPoint> = mutableMapOf(),
+          private val edgeMap: MutableMap<EdgeId, ChainEdge> = mutableMapOf(),
           val metadata: GraphMetadata = GraphMetadata()
       ) {
+          val nodes: List<ChainPoint> get() = nodeMap.values.toList()
+          val edges: List<ChainEdge> get() = edgeMap.values.toList()
+
           fun upsertNode(node: ChainPoint): ChainPoint {
-              val existing = nodes.find { it.id == node.id }
-              if (existing != null) {
-                  nodes.remove(existing)
-              }
-              nodes.add(node)
+              nodeMap[node.id] = node
               return node
           }
 
           fun upsertEdge(edge: ChainEdge): ChainEdge {
-              val existing = edges.find { it.id == edge.id }
-              if (existing != null) {
-                  edges.remove(existing)
-              }
-              edges.add(edge)
+              edgeMap[edge.id] = edge
               return edge
           }
 
-          fun findNode(id: NodeId): ChainPoint? = nodes.find { it.id == id }
+          fun findNode(id: NodeId): ChainPoint? = nodeMap[id]
 
+          /**
+           * Finds all hub ancestors by traversing edges backward from the given node.
+           * Uses a visited set to handle potential cycles in the graph. While cycles should
+           * ideally be prevented at edge creation time, this defensive approach ensures the
+           * traversal terminates even if the graph contains unexpected cycles.
+           */
           fun findHubAncestors(nodeId: NodeId): List<ChainPoint> {
               val result = mutableListOf<ChainPoint>()
               var currentId: NodeId? = nodeId
@@ -362,11 +430,22 @@ new_files:
       package de.kolping.cockpit.mapping.core
 
       class AutoMappingEngine {
-          private val hubPatterns = listOf("/my/", "/myStudent", "/dashboard", "/course/view.php")
+          private val hubPatterns = listOf(
+              Regex("^/my(/|\$)", RegexOption.IGNORE_CASE),
+              Regex("^/myStudent(/|\$)", RegexOption.IGNORE_CASE),
+              Regex("^/dashboard(/|\$)", RegexOption.IGNORE_CASE),
+              Regex("^/course/view\\.php", RegexOption.IGNORE_CASE)
+          )
           private val learnedHubSignatures = mutableSetOf<String>()
 
           fun detectHub(url: String, signature: String): Boolean {
-              if (hubPatterns.any { url.contains(it, ignoreCase = true) }) return true
+              // Extract path portion of the URL (without scheme, host, or query)
+              val withoutScheme = url.substringAfter("://", url)
+              val afterHost = withoutScheme.substringAfter("/", "")
+              val rawPath = afterHost.substringBefore("?")
+              val path = "/" + rawPath.trimStart('/')
+              
+              if (hubPatterns.any { it.containsMatchIn(path) }) return true
               return signature in learnedHubSignatures
           }
 
@@ -424,7 +503,7 @@ new_files:
                               if (existingNode == null) {
                                   val node = ChainPoint(
                                       id = nodeId,
-                                      name = extractPageName(event.url),
+                                      name = extractLastPathSegment(event.url),
                                       url = event.url,
                                       signature = sig,
                                       isHub = isHub
@@ -464,7 +543,7 @@ new_files:
               return graph
           }
 
-          private fun extractPageName(url: String): String {
+          private fun extractLastPathSegment(url: String): String {
               val path = url.substringAfter("://").substringBefore("?").substringAfter("/")
               return path.split("/").lastOrNull()?.ifBlank { "root" } ?: "root"
           }
@@ -473,6 +552,8 @@ new_files:
   - path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/Redaction.kt
     content: |
       package de.kolping.cockpit.mapping.core
+
+      import kotlinx.serialization.json.*
 
       object Redaction {
           private val sensitiveHeaderKeys = setOf("authorization", "cookie", "set-cookie")
@@ -484,25 +565,38 @@ new_files:
           fun redactHeaders(headers: Map<String, String>): Map<String, String> =
               headers.mapValues { (k, v) -> if (k.lowercase() in sensitiveHeaderKeys) "<redacted>" else v }
 
+          /**
+           * Redacts sensitive keys from JSON using proper JSON parsing.
+           * This ensures escaped quotes and nested structures are handled correctly.
+           */
           fun redactJsonKeys(jsonString: String): String {
-              var result = jsonString
-              for (key in sensitiveJsonKeys) {
-                  var idx = 0
-                  while (true) {
-                      val keyPattern = "\"$key\""
-                      val keyIdx = result.indexOf(keyPattern, idx)
-                      if (keyIdx < 0) break
-                      val colonIdx = result.indexOf(':', keyIdx + keyPattern.length)
-                      if (colonIdx < 0) break
-                      val valueStart = result.indexOf('"', colonIdx + 1)
-                      if (valueStart < 0) break
-                      val valueEnd = result.indexOf('"', valueStart + 1)
-                      if (valueEnd < 0) break
-                      result = result.substring(0, valueStart + 1) + "<redacted>" + result.substring(valueEnd)
-                      idx = valueStart + 11
-                  }
+              return try {
+                  val element = Json.parseToJsonElement(jsonString)
+                  val redacted = redactJsonElement(element)
+                  Json.encodeToString(JsonElement.serializer(), redacted)
+              } catch (e: Exception) {
+                  // Fallback: return original if not valid JSON
+                  jsonString
               }
-              return result
+          }
+
+          private fun redactJsonElement(element: JsonElement): JsonElement {
+              return when (element) {
+                  is JsonObject -> {
+                      val redactedMap = element.mapValues { (key, value) ->
+                          if (key in sensitiveJsonKeys) {
+                              JsonPrimitive("<redacted>")
+                          } else {
+                              redactJsonElement(value)
+                          }
+                      }
+                      JsonObject(redactedMap)
+                  }
+                  is JsonArray -> {
+                      JsonArray(element.map { redactJsonElement(it) })
+                  }
+                  else -> element
+              }
           }
 
           fun redactUrlQuery(url: String): String {
