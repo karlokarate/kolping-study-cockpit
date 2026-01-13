@@ -186,5 +186,4 @@ sealed class Screen {
     object ModuleDetail : Screen()
     object OfflineLibrary : Screen()
     object PdfViewer : Screen()
-    object Recorder : Screen()
 }
