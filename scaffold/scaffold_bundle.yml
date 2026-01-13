@@ -1,190 +1,1115 @@
 version: 1
-description: 'Website mapping MVP scaffold: new mapping modules + minimal integration
-  into androidApp.'
+description: 'Website mapping MVP scaffold: new mapping modules + minimal integration into androidApp.'
 new_files:
 - path: kmp/mapping/core/build.gradle.kts
-  content: "plugins {\n    kotlin(\"multiplatform\")\n    kotlin(\"plugin.serialization\"\
-    )\n}\n\nkotlin {\n    // MVP: only commonMain; platform targets can be added later.\n\
-    \    sourceSets {\n        val commonMain by getting {\n            dependencies\
-    \ {\n                implementation(\"org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3\"\
-    )\n            }\n        }\n    }\n}\n"
-- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/RecordChain.kt
-  content: "package de.kolping.cockpit.mapping.core\n\nimport kotlinx.serialization.Serializable\n\
-    \n@Serializable\ndata class RecordChain(\n    val id: String,\n    val name: String,\n\
-    \    val rootNodeId: String? = null,\n)\n\n@Serializable\ndata class ChainPoint(\n\
-    \    val id: String,\n    val name: String,\n    val url: String,\n    val urlPattern:\
-    \ String? = null,\n    val tags: List<String> = emptyList(),\n    val signature:\
-    \ String? = null,\n    val isHub: Boolean = false,\n)\n\n@Serializable\ndata class\
-    \ ChainEdge(\n    val id: String,\n    val fromNodeId: String,\n    val toNodeId:\
-    \ String,\n    val label: String? = null,\n    val createdBy: CreatedBy = CreatedBy.AUTO,\n\
-    \    val reason: String? = null,\n)\n\n@Serializable\nenum class CreatedBy { MANUAL,\
-    \ AUTO }\n"
-- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/RecordingSession.kt
-  content: "package de.kolping.cockpit.mapping.core\n\nimport kotlinx.serialization.Serializable\n\
-    \n@Serializable\ndata class RecordingSession(\n    val id: String,\n    val startedAtEpochMs:\
-    \ Long,\n    val endedAtEpochMs: Long? = null,\n    val targetUrl: String? = null,\n\
-    \    val filters: CaptureFilters = CaptureFilters(),\n    val events: List<Event>\
-    \ = emptyList(),\n)\n\n@Serializable\ndata class CaptureFilters(\n    val hostAllowlist:\
-    \ List<String> = emptyList(),\n    val captureJsonBodies: Boolean = true,\n  \
-    \  val maxBodyBytes: Int = 256_000,\n    val redact: Boolean = true,\n)\n\n@Serializable\n\
-    sealed class Event {\n    abstract val tsEpochMs: Long\n\n    @Serializable\n\
-    \    data class Navigation(\n        override val tsEpochMs: Long,\n        val\
-    \ url: String,\n        val phase: Phase,\n    ) : Event()\n\n    @Serializable\n\
-    \    data class NetworkRequest(\n        override val tsEpochMs: Long,\n     \
-    \   val id: String,\n        val method: String,\n        val url: String,\n \
-    \       val headers: Map<String, String> = emptyMap(),\n        val body: String?\
-    \ = null,\n    ) : Event()\n\n    @Serializable\n    data class NetworkResponse(\n\
-    \        override val tsEpochMs: Long,\n        val requestId: String,\n     \
-    \   val status: Int,\n        val headers: Map<String, String> = emptyMap(),\n\
-    \        val body: String? = null,\n        val contentType: String? = null,\n\
-    \        val graphqlOperationName: String? = null,\n        val moodleAjaxMethod:\
-    \ String? = null,\n    ) : Event()\n\n    @Serializable\n    data class Marker(\n\
-    \        override val tsEpochMs: Long,\n        val name: String,\n    ) : Event()\n\
-    \n    @Serializable\n    enum class Phase { STARTED, FINISHED }\n}\n"
-- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/AutoMappingEngine.kt
-  content: "package de.kolping.cockpit.mapping.core\n\n/**\n * MVP auto-mapping heuristics:\n\
-    \ * - resolve/create nodes by normalized URL + request signature\n * - infer parent\
-    \ edges; branch from hub/root on context switch or nav click marker\n *\n * This\
-    \ is intentionally minimal: explainable + reversible.\n */\nclass AutoMappingEngine\
-    \ {\n    data class Inference(val parentNodeId: String?, val reason: String)\n\
-    \n    fun inferParent(\n        lastActiveNodeId: String?,\n        closestHubAncestorId:\
-    \ String?,\n        isNewNodeHub: Boolean,\n        isNavClick: Boolean,\n   \
-    \     isContextSwitch: Boolean,\n    ): Inference {\n        if (isNewNodeHub)\
-    \ return Inference(parentNodeId = null, reason = \"HUB_MATCH\")\n        if (isNavClick)\
-    \ return Inference(parentNodeId = closestHubAncestorId, reason = \"NAV_CLICK\"\
-    )\n        if (isContextSwitch) return Inference(parentNodeId = closestHubAncestorId,\
-    \ reason = \"CONTEXT_SWITCH\")\n        return Inference(parentNodeId = lastActiveNodeId,\
-    \ reason = \"LINEAR\")\n    }\n}\n"
+  content: |
+    plugins {
+        kotlin("multiplatform")
+        kotlin("plugin.serialization")
+    }
+    
+    kotlin {
+        jvm()
+        
+        sourceSets {
+            val commonMain by getting {
+                dependencies {
+                    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+                    implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.6.1")
+                }
+            }
+        }
+    }
+
+- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/Ids.kt
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    import kotlin.random.Random
+    import kotlinx.datetime.Clock
+    
+    typealias ChainId = String
+    typealias NodeId = String
+    typealias EdgeId = String
+    typealias SessionId = String
+    typealias CallId = String
+    
+    fun newId(prefix: String): String {
+        val timestamp = Clock.System.now().toEpochMilliseconds()
+        val random = Random.nextInt(10000, 99999)
+        return "${prefix}_${timestamp}_${random}"
+    }
+    
+    fun currentTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
+
+- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/Models.kt
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    import kotlinx.serialization.Serializable
+    
+    @Serializable
+    data class RecordChain(
+        val id: ChainId,
+        val name: String,
+        val rootNodeId: NodeId? = null,
+        val nodeIds: List<NodeId> = emptyList(),
+        val createdAtEpochMs: Long = currentTimeMillis(),
+    )
+    
+    @Serializable
+    data class ChainPoint(
+        val id: NodeId,
+        val name: String,
+        val url: String,
+        val urlPattern: String? = null,
+        val tags: List<String> = emptyList(),
+        val signature: String? = null,
+        val isHub: Boolean = false,
+        val observedOps: List<String> = emptyList(),
+        val observedAjaxMethods: List<String> = emptyList(),
+    )
+    
+    @Serializable
+    data class ChainEdge(
+        val id: EdgeId,
+        val fromNodeId: NodeId,
+        val toNodeId: NodeId,
+        val label: String? = null,
+        val createdBy: CreatedBy = CreatedBy.AUTO,
+        val reason: EdgeReason? = null,
+    )
+    
+    @Serializable
+    enum class CreatedBy { MANUAL, AUTO }
+    
+    @Serializable
+    enum class EdgeReason {
+        MANUAL_PARENT,
+        HUB_MATCH,
+        NAV_CLICK,
+        CONTEXT_SWITCH,
+        DIRECT_NAV
+    }
+    
+    @Serializable
+    data class RecordingSession(
+        val id: SessionId,
+        val chainId: ChainId? = null,
+        val startedAtEpochMs: Long,
+        val endedAtEpochMs: Long? = null,
+        val targetUrl: String? = null,
+        val filters: CaptureFilters = CaptureFilters(),
+        val events: List<Event> = emptyList(),
+        val calls: List<HttpCall> = emptyList(),
+    )
+    
+    @Serializable
+    data class CaptureFilters(
+        val hostAllowlist: List<String> = emptyList(),
+        val contentTypeAllowlist: List<String> = listOf("application/json", "text/html"),
+        val captureJsonBodies: Boolean = true,
+        val maxBodyBytes: Int = 256_000,
+        val redact: Boolean = true,
+    )
+    
+    @Serializable
+    sealed class Event {
+        abstract val tsEpochMs: Long
+    
+        @Serializable
+        data class NavigationEvent(
+            override val tsEpochMs: Long,
+            val url: String,
+            val phase: Phase,
+        ) : Event()
+    
+        @Serializable
+        data class MarkerEvent(
+            override val tsEpochMs: Long,
+            val name: String,
+            val metadata: Map<String, String> = emptyMap(),
+        ) : Event()
+    
+        @Serializable
+        data class NetworkRequestEvent(
+            override val tsEpochMs: Long,
+            val id: CallId,
+            val method: String,
+            val url: String,
+            val headers: Map<String, String> = emptyMap(),
+            val body: String? = null,
+        ) : Event()
+    
+        @Serializable
+        data class NetworkResponseEvent(
+            override val tsEpochMs: Long,
+            val requestId: CallId,
+            val status: Int,
+            val headers: Map<String, String> = emptyMap(),
+            val body: String? = null,
+            val contentType: String? = null,
+            val graphqlOperationName: String? = null,
+            val moodleAjaxMethod: String? = null,
+        ) : Event()
+    
+        @Serializable
+        data class ClickEvent(
+            override val tsEpochMs: Long,
+            val cssPath: String,
+            val textSnippet: String? = null,
+            val targetUrl: String? = null,
+        ) : Event()
+    
+        @Serializable
+        enum class Phase { START, FINISH }
+    }
+    
+    @Serializable
+    data class HttpCall(
+        val id: CallId,
+        val sessionId: SessionId? = null,
+        val url: String,
+        val method: String,
+        val requestHeaders: Map<String, String> = emptyMap(),
+        val requestBody: String? = null,
+        val status: Int? = null,
+        val responseHeaders: Map<String, String> = emptyMap(),
+        val responseBody: String? = null,
+        val contentType: String? = null,
+        val graphqlOperationName: String? = null,
+        val moodleAjaxMethod: String? = null,
+        val signature: String? = null,
+        val startedAt: Long = currentTimeMillis(),
+        val completedAt: Long? = null,
+    )
+
 - path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/Redaction.kt
-  content: "package de.kolping.cockpit.mapping.core\n\nobject Redaction {\n    private\
-    \ val sensitiveHeaderKeys = setOf(\"authorization\", \"cookie\", \"set-cookie\"\
-    )\n    private val sensitiveJsonKeys = setOf(\n        \"access_token\",\"refresh_token\"\
-    ,\"id_token\",\"code\",\"state\",\"nonce\",\"session_state\"\n    )\n\n    fun\
-    \ redactHeaders(headers: Map<String, String>): Map<String, String> =\n       \
-    \ headers.mapValues { (k, v) -> if (k.lowercase() in sensitiveHeaderKeys) \"<redacted>\"\
-    \ else v }\n\n    fun redactJsonLike(text: String): String {\n        // very\
-    \ lightweight MVP redaction: mask common token keys in JSON-ish bodies\n     \
-    \   var out = text\n        for (k in sensitiveJsonKeys) {\n            out =\
-    \ out.replace(Regex(\"(\\\"$k\\\"\\s*:\\s*)\\\"[^\\\"]*\\\"\"), \"$1\\\"<redacted>\\\
-    \"\")\n        }\n        return out\n    }\n}\n"
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    object Redaction {
+        private val sensitiveHeaderKeys = setOf("authorization", "cookie", "set-cookie")
+        private val sensitiveJsonKeys = setOf(
+            "access_token", "refresh_token", "id_token", "code", "state", "nonce", "session_state"
+        )
+        private val sensitiveQueryParams = setOf("code", "state", "nonce", "session_state")
+    
+        fun redactHeaders(headers: Map<String, String>): Map<String, String> =
+            headers.mapValues { (k, v) -> 
+                if (k.lowercase() in sensitiveHeaderKeys) "<redacted>" else v 
+            }
+    
+        fun redactJsonKeys(jsonString: String): String {
+            var out = jsonString
+            for (k in sensitiveJsonKeys) {
+                out = out.replace(Regex("(\"$k\"\\s*:\\s*)\"[^\"]*\""), "$1\"<redacted>\"")
+            }
+            return out
+        }
+    
+        fun redactUrlQuery(url: String): String {
+            if (!url.contains("?")) return url
+            val parts = url.split("?", limit = 2)
+            if (parts.size < 2) return url
+            
+            val base = parts[0]
+            val query = parts[1].split("&").joinToString("&") { param ->
+                val kv = param.split("=", limit = 2)
+                if (kv.size == 2 && kv[0].lowercase() in sensitiveQueryParams) {
+                    "${kv[0]}=<redacted>"
+                } else {
+                    param
+                }
+            }
+            return "$base?$query"
+        }
+    }
+
+- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/Signature.kt
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    import kotlinx.serialization.json.*
+    
+    object Signature {
+        private val volatileParams = setOf("_", "t", "timestamp", "nocache")
+        
+        fun normalizeUrl(url: String): String {
+            return try {
+                val withoutFragment = url.substringBefore('#')
+                val parts = withoutFragment.split('?', limit = 2)
+                if (parts.size == 1) {
+                    withoutFragment
+                } else {
+                    val base = parts[0]
+                    val queryParams = parts[1].split('&')
+                        .map { it.split('=', limit = 2) }
+                        .filter { it[0].lowercase() !in volatileParams }
+                        .sortedBy { it[0] }
+                        .joinToString("&") { it.joinToString("=") }
+                    if (queryParams.isEmpty()) base else "$base?$queryParams"
+                }
+            } catch (e: Exception) {
+                url.substringBefore('#')
+            }
+        }
+        
+        fun computeNodeSignature(
+            url: String,
+            observedOps: List<String> = emptyList(),
+            observedAjaxMethods: List<String> = emptyList()
+        ): String {
+            val normalized = normalizeUrl(url)
+            val ops = observedOps.sorted().joinToString(",")
+            val ajax = observedAjaxMethods.sorted().joinToString(",")
+            return "node:${normalized.hashCode()}:${ops.hashCode()}:${ajax.hashCode()}"
+        }
+        
+        fun computeCallSignature(
+            url: String,
+            method: String,
+            contentType: String? = null,
+            opName: String? = null,
+            ajaxMethod: String? = null
+        ): String {
+            val normalized = normalizeUrl(url)
+            val parts = mutableListOf(method.uppercase(), normalized)
+            opName?.let { parts.add("op:$it") }
+            ajaxMethod?.let { parts.add("ajax:$it") }
+            contentType?.let { if (it.contains("json")) parts.add("json") }
+            return "call:" + parts.joinToString(":").hashCode().toString()
+        }
+        
+        fun extractGraphQLOperationName(body: String?): String? {
+            if (body.isNullOrBlank()) return null
+            return try {
+                Json.parseToJsonElement(body).jsonObject["operationName"]?.jsonPrimitive?.content
+            } catch (e: Exception) { null }
+        }
+        
+        fun extractMoodleAjaxMethod(url: String, body: String?): String? {
+            if (!body.isNullOrBlank()) {
+                try {
+                    val json = Json.parseToJsonElement(body)
+                    when (json) {
+                        is JsonArray -> json.firstOrNull()?.jsonObject?.get("methodname")?.jsonPrimitive?.content?.let { return it }
+                        is JsonObject -> json["methodname"]?.jsonPrimitive?.content?.let { return it }
+                        else -> {}
+                    }
+                } catch (e: Exception) {}
+            }
+            if (url.contains("methodname=")) {
+                Regex("methodname=([^&]+)").find(url)?.groupValues?.get(1)?.let { return it }
+            }
+            return null
+        }
+    }
+
+- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/AutoMappingEngine.kt
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    class AutoMappingEngine {
+        private val learnedHubSignatures = mutableSetOf<String>()
+        
+        data class Inference(val parentNodeId: NodeId?, val reason: EdgeReason)
+        
+        fun detectHub(url: String, signature: String): Boolean {
+            val normalizedUrl = Signature.normalizeUrl(url).lowercase()
+            val hubPatterns = listOf("/my/", "/mystudent", "/dashboard", "/home", "/portal", "/index")
+            if (hubPatterns.any { normalizedUrl.contains(it) }) return true
+            return signature in learnedHubSignatures
+        }
+        
+        fun markAsHub(signature: String) { learnedHubSignatures.add(signature) }
+        
+        fun inferParentNode(
+            lastNode: NodeId?,
+            knownHubs: List<NodeId>,
+            newNode: ChainPoint,
+            lastClickWasNav: Boolean,
+            contextSwitch: Boolean,
+            manualParentId: NodeId? = null
+        ): Inference {
+            if (manualParentId != null) return Inference(manualParentId, EdgeReason.MANUAL_PARENT)
+            if (newNode.isHub) return Inference(null, EdgeReason.HUB_MATCH)
+            val closestHub = knownHubs.lastOrNull()
+            if (lastClickWasNav) return Inference(closestHub, EdgeReason.NAV_CLICK)
+            if (contextSwitch) return Inference(closestHub, EdgeReason.CONTEXT_SWITCH)
+            return Inference(lastNode, EdgeReason.DIRECT_NAV)
+        }
+        
+        fun inferEdgeReason(
+            isManual: Boolean,
+            isHub: Boolean,
+            isNavClick: Boolean,
+            isContextSwitch: Boolean
+        ): EdgeReason = when {
+            isManual -> EdgeReason.MANUAL_PARENT
+            isHub -> EdgeReason.HUB_MATCH
+            isNavClick -> EdgeReason.NAV_CLICK
+            isContextSwitch -> EdgeReason.CONTEXT_SWITCH
+            else -> EdgeReason.DIRECT_NAV
+        }
+        
+        fun updateGraph(mapGraph: MapGraph, session: RecordingSession): MapGraph {
+            var graph = mapGraph
+            var lastNodeId: NodeId? = null
+            val hubIds = mutableListOf<NodeId>()
+            
+            for (event in session.events) {
+                if (event is Event.NavigationEvent && event.phase == Event.Phase.FINISH) {
+                    val sig = Signature.computeNodeSignature(event.url)
+                    val isHub = detectHub(event.url, sig)
+                    val existing = graph.findNodeBySignature(sig)
+                    val nodeId = existing?.id ?: newId("node")
+                    
+                    if (existing == null) {
+                        val node = ChainPoint(
+                            id = nodeId,
+                            name = event.url.substringAfter("//").substringBefore("?").take(50),
+                            url = event.url,
+                            signature = sig,
+                            isHub = isHub
+                        )
+                        graph = graph.upsertNode(node)
+                        
+                        if (lastNodeId != null) {
+                            val edge = ChainEdge(
+                                id = newId("edge"),
+                                fromNodeId = lastNodeId,
+                                toNodeId = nodeId,
+                                reason = if (isHub) EdgeReason.HUB_MATCH else EdgeReason.DIRECT_NAV
+                            )
+                            graph = graph.upsertEdge(edge)
+                        }
+                    }
+                    if (isHub) hubIds.add(nodeId)
+                    lastNodeId = nodeId
+                }
+            }
+            return graph
+        }
+    }
+
+- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/SchemaDeriver.kt
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    import kotlinx.serialization.Serializable
+    import kotlinx.serialization.json.*
+    
+    object SchemaDeriver {
+        @Serializable
+        data class FieldSchema(
+            val path: String,
+            val type: String,
+            val storageHint: String = "string",
+            val isArray: Boolean = false,
+            val isNullable: Boolean = false
+        )
+        
+        fun deriveSchema(jsonString: String): List<FieldSchema> {
+            if (jsonString.isBlank()) return emptyList()
+            return try {
+                val element = Json.parseToJsonElement(jsonString)
+                val fields = mutableListOf<FieldSchema>()
+                extractFields(element, "", fields)
+                fields
+            } catch (e: Exception) { emptyList() }
+        }
+        
+        private fun extractFields(element: JsonElement, prefix: String, fields: MutableList<FieldSchema>) {
+            when (element) {
+                is JsonObject -> element.entries.forEach { (k, v) ->
+                    extractFields(v, if (prefix.isEmpty()) k else "$prefix.$k", fields)
+                }
+                is JsonArray -> if (element.isNotEmpty()) {
+                    extractFields(element.first(), prefix, fields)
+                    fields.lastOrNull()?.let { fields[fields.lastIndex] = it.copy(isArray = true) }
+                }
+                is JsonPrimitive -> {
+                    val (type, hint) = when {
+                        element.isString -> "string" to "string"
+                        element.booleanOrNull != null -> "boolean" to "string"
+                        element.intOrNull != null -> "number" to "string"
+                        element.longOrNull != null -> "number" to "string"
+                        element.doubleOrNull != null -> "number" to "string"
+                        element.content == "null" -> "null" to "ignore"
+                        else -> "unknown" to "string"
+                    }
+                    fields.add(FieldSchema(prefix, type, hint, isNullable = element.content == "null"))
+                }
+            }
+        }
+    }
+
+- path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/MapGraph.kt
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    import kotlinx.serialization.Serializable
+    
+    @Serializable
+    data class MapGraph(
+        val nodes: List<ChainPoint> = emptyList(),
+        val edges: List<ChainEdge> = emptyList(),
+        val metadata: MapMetadata = MapMetadata()
+    ) {
+        fun upsertNode(node: ChainPoint): MapGraph {
+            val updated = nodes.filter { it.id != node.id } + node
+            return copy(nodes = updated, metadata = metadata.copy(updatedAt = currentTimeMillis()))
+        }
+        
+        fun upsertEdge(edge: ChainEdge): MapGraph {
+            val updated = edges.filter { it.id != edge.id } + edge
+            return copy(edges = updated, metadata = metadata.copy(updatedAt = currentTimeMillis()))
+        }
+        
+        fun findNodeBySignature(signature: String): ChainPoint? = nodes.find { it.signature == signature }
+        
+        fun findHubAncestors(nodeId: NodeId): List<NodeId> {
+            val hubs = mutableListOf<NodeId>()
+            val visited = mutableSetOf<NodeId>()
+            val queue = mutableListOf(nodeId)
+            while (queue.isNotEmpty()) {
+                val current = queue.removeAt(0)
+                if (current in visited) continue
+                visited.add(current)
+                nodes.find { it.id == current }?.let { if (it.isHub) hubs.add(current) }
+                edges.filter { it.toNodeId == current }.forEach { if (it.fromNodeId !in visited) queue.add(it.fromNodeId) }
+            }
+            return hubs
+        }
+    }
+    
+    @Serializable
+    data class MapMetadata(
+        val generatedAt: Long = currentTimeMillis(),
+        val updatedAt: Long = currentTimeMillis(),
+        val appVersion: String = "1.0.0",
+        val filtersUsed: CaptureFilters = CaptureFilters()
+    )
+
 - path: kmp/mapping/core/src/commonMain/kotlin/de/kolping/cockpit/mapping/core/ExportBundle.kt
-  content: "package de.kolping.cockpit.mapping.core\n\nimport kotlinx.serialization.encodeToString\n\
-    import kotlinx.serialization.json.Json\n\nobject ExportBundle {\n    private val\
-    \ json = Json { prettyPrint = true; encodeDefaults = true }\n\n    fun sessionJson(session:\
-    \ RecordingSession): String = json.encodeToString(session)\n}\n"
+  content: |
+    package de.kolping.cockpit.mapping.core
+    
+    import kotlinx.serialization.Serializable
+    import kotlinx.serialization.encodeToString
+    import kotlinx.serialization.json.Json
+    
+    object ExportBundle {
+        private val json = Json { prettyPrint = true; encodeDefaults = true }
+        
+        fun sessionJson(session: RecordingSession): String = json.encodeToString(session)
+        fun mapGraphJson(mapGraph: MapGraph): String = json.encodeToString(mapGraph)
+        fun chainJson(chain: RecordChain): String = json.encodeToString(chain)
+        fun callJson(call: HttpCall): String = json.encodeToString(call)
+        fun schemaJson(fields: List<SchemaDeriver.FieldSchema>): String = json.encodeToString(fields)
+        
+        @Serializable
+        data class ExportManifest(
+            val version: String = "1.0",
+            val exportedAt: Long = currentTimeMillis(),
+            val files: Map<String, String> = emptyMap()
+        )
+        
+        fun manifestJson(files: Map<String, String>): String = json.encodeToString(ExportManifest(files = files))
+        
+        data class BundleOutput(
+            val mapJson: String,
+            val chains: Map<String, String>,
+            val sessions: Map<String, String>,
+            val schemas: Map<String, String>
+        )
+        
+        fun writeBundle(
+            mapGraph: MapGraph,
+            chains: List<RecordChain>,
+            sessions: List<RecordingSession>,
+            redact: Boolean = true
+        ): BundleOutput {
+            val chainFiles = chains.associate { "chains/${it.id}.json" to chainJson(it) }
+            val sessionFiles = sessions.associate { s ->
+                val redacted = if (redact) redactSession(s) else s
+                "sessions/${s.id}.json" to sessionJson(redacted)
+            }
+            val schemaFiles = sessions.flatMap { it.calls }
+                .filter { it.responseBody != null }
+                .distinctBy { it.signature }
+                .associate { call ->
+                    val schema = SchemaDeriver.deriveSchema(call.responseBody ?: "")
+                    "schemas/${call.signature ?: call.id}.json" to schemaJson(schema)
+                }
+            return BundleOutput(mapGraphJson(mapGraph), chainFiles, sessionFiles, schemaFiles)
+        }
+        
+        private fun redactSession(session: RecordingSession): RecordingSession {
+            val redactedCalls = session.calls.map { call ->
+                call.copy(
+                    requestHeaders = Redaction.redactHeaders(call.requestHeaders),
+                    responseHeaders = Redaction.redactHeaders(call.responseHeaders),
+                    requestBody = call.requestBody?.let { Redaction.redactJsonKeys(it) },
+                    responseBody = call.responseBody?.let { Redaction.redactJsonKeys(it) },
+                    url = Redaction.redactUrlQuery(call.url)
+                )
+            }
+            return session.copy(calls = redactedCalls)
+        }
+    }
+
 - path: kmp/mapping/android/build.gradle.kts
-  content: "plugins {\n    id(\"com.android.library\")\n    kotlin(\"android\")\n\
-    }\n\nandroid {\n    namespace = \"de.kolping.cockpit.mapping.android\"\n    compileSdk\
-    \ = 35\n\n    defaultConfig {\n        minSdk = 26\n    }\n}\n\ndependencies {\n\
-    \    implementation(project(\":mapping:core\"))\n    implementation(\"androidx.compose.material3:material3:1.3.1\"\
-    )\n    implementation(\"androidx.compose.ui:ui:1.7.6\")\n    implementation(\"\
-    androidx.activity:activity-compose:1.9.3\")\n}\n"
+  content: |
+    plugins {
+        id("com.android.library")
+        kotlin("android")
+    }
+    
+    android {
+        namespace = "de.kolping.cockpit.mapping.android"
+        compileSdk = 34
+        
+        defaultConfig {
+            minSdk = 26
+        }
+        
+        buildFeatures {
+            compose = true
+        }
+        
+        composeOptions {
+            kotlinCompilerExtensionVersion = "1.5.8"
+        }
+        
+        compileOptions {
+            sourceCompatibility = JavaVersion.VERSION_1_8
+            targetCompatibility = JavaVersion.VERSION_1_8
+        }
+        
+        kotlinOptions {
+            jvmTarget = "1.8"
+        }
+    }
+    
+    dependencies {
+        implementation(project(":mapping:core"))
+        implementation("androidx.compose.material3:material3:1.2.0")
+        implementation("androidx.compose.ui:ui:1.6.0")
+        implementation("androidx.activity:activity-compose:1.8.2")
+        implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
+    }
+
+- path: kmp/mapping/android/src/main/AndroidManifest.xml
+  content: |
+    <?xml version="1.0" encoding="utf-8"?>
+    <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+        <uses-permission android:name="android.permission.INTERNET" />
+    </manifest>
+
+- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/JsBridge.kt
+  content: |
+    package de.kolping.cockpit.mapping.android
+    
+    import android.webkit.JavascriptInterface
+    import android.webkit.WebView
+    import de.kolping.cockpit.mapping.core.*
+    import kotlinx.serialization.json.*
+    
+    class JsBridge(private val controller: RecorderController, private val webView: WebView) {
+        companion object { const val BRIDGE_NAME = "RecorderBridge" }
+        
+        @JavascriptInterface
+        fun postMessage(jsonMessage: String) {
+            try {
+                val json = Json.parseToJsonElement(jsonMessage).jsonObject
+                val type = json["type"]?.jsonPrimitive?.content ?: return
+                val data = json["data"]?.jsonObject ?: return
+                when (type) {
+                    "navigation" -> handleNav(data)
+                    "click" -> handleClick(data)
+                    "request" -> handleReq(data)
+                    "response" -> handleRes(data)
+                    "marker" -> handleMarker(data)
+                }
+            } catch (e: Exception) { println("Bridge error: ${e.message}") }
+        }
+        
+        private fun handleNav(d: JsonObject) {
+            val url = d["url"]?.jsonPrimitive?.content ?: return
+            val phase = when (d["phase"]?.jsonPrimitive?.content) {
+                "start" -> Event.Phase.START
+                "finish" -> Event.Phase.FINISH
+                else -> return
+            }
+            controller.addEvent(Event.NavigationEvent(currentTimeMillis(), url, phase))
+        }
+        
+        private fun handleClick(d: JsonObject) {
+            controller.addEvent(Event.ClickEvent(
+                currentTimeMillis(),
+                d["cssPath"]?.jsonPrimitive?.content ?: "",
+                d["textSnippet"]?.jsonPrimitive?.contentOrNull,
+                d["targetUrl"]?.jsonPrimitive?.contentOrNull
+            ))
+        }
+        
+        private fun handleReq(d: JsonObject) {
+            controller.addEvent(Event.NetworkRequestEvent(
+                currentTimeMillis(),
+                d["id"]?.jsonPrimitive?.content ?: return,
+                d["method"]?.jsonPrimitive?.content ?: "GET",
+                d["url"]?.jsonPrimitive?.content ?: return,
+                d["headers"]?.jsonObject?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap(),
+                d["body"]?.jsonPrimitive?.contentOrNull
+            ))
+        }
+        
+        private fun handleRes(d: JsonObject) {
+            val body = d["body"]?.jsonPrimitive?.contentOrNull
+            val url = d["url"]?.jsonPrimitive?.content ?: ""
+            controller.addEvent(Event.NetworkResponseEvent(
+                currentTimeMillis(),
+                d["requestId"]?.jsonPrimitive?.content ?: return,
+                d["status"]?.jsonPrimitive?.intOrNull ?: 0,
+                d["headers"]?.jsonObject?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap(),
+                body,
+                d["contentType"]?.jsonPrimitive?.contentOrNull,
+                Signature.extractGraphQLOperationName(body),
+                Signature.extractMoodleAjaxMethod(url, body)
+            ))
+        }
+        
+        private fun handleMarker(d: JsonObject) {
+            controller.addEvent(Event.MarkerEvent(
+                currentTimeMillis(),
+                d["name"]?.jsonPrimitive?.content ?: return,
+                d["metadata"]?.jsonObject?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap()
+            ))
+        }
+    }
+
+- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/InjectionScripts.kt
+  content: |
+    package de.kolping.cockpit.mapping.android
+    
+    object InjectionScripts {
+        const val CAPTURE_ALL = """
+    (function(){
+      if(window.__kolpingRecorder) return;
+      window.__kolpingRecorder = true;
+      let rid = 0;
+      const genId = () => 'r_' + Date.now() + '_' + (++rid);
+      const post = (type, data) => { try { RecorderBridge.postMessage(JSON.stringify({type, data})); } catch(e){} };
+      
+      const origFetch = window.fetch;
+      window.fetch = async function(...args) {
+        const id = genId();
+        const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || '';
+        const opts = args[1] || {};
+        post('request', {id, method: opts.method || 'GET', url, body: opts.body ? String(opts.body) : null, headers: {}});
+        try {
+          const res = await origFetch.apply(this, args);
+          res.clone().text().then(body => post('response', {requestId: id, status: res.status, body, contentType: res.headers.get('content-type'), url}));
+          return res;
+        } catch(e) { throw e; }
+      };
+      
+      const XHR = XMLHttpRequest.prototype, origOpen = XHR.open, origSend = XHR.send;
+      XHR.open = function(m, u) { this._rid = genId(); this._rm = m; this._ru = u; return origOpen.apply(this, arguments); };
+      XHR.send = function(b) {
+        post('request', {id: this._rid, method: this._rm, url: this._ru, body: b ? String(b) : null, headers: {}});
+        this.onload = () => post('response', {requestId: this._rid, status: this.status, body: this.responseText, contentType: this.getResponseHeader('content-type'), url: this._ru});
+        return origSend.apply(this, arguments);
+      };
+      
+      document.addEventListener('click', e => {
+        const path = [];
+        let el = e.target;
+        while (el && el.nodeType === 1) {
+          let s = el.nodeName.toLowerCase();
+          if (el.id) { path.unshift(s + '#' + el.id); break; }
+          path.unshift(s);
+          el = el.parentElement;
+        }
+        post('click', {cssPath: path.join(' > '), textSnippet: (e.target.textContent || '').slice(0, 50), targetUrl: e.target.href || null});
+      }, true);
+    })();
+    """
+    }
+
+- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/RecorderController.kt
+  content: |
+    package de.kolping.cockpit.mapping.android
+    
+    import androidx.compose.runtime.*
+    import de.kolping.cockpit.mapping.core.*
+    
+    class RecorderController {
+        var currentChain by mutableStateOf<RecordChain?>(null); private set
+        var mapGraph by mutableStateOf(MapGraph()); private set
+        var currentSession by mutableStateOf<RecordingSession?>(null); private set
+        var chainPoints = mutableStateListOf<ChainPoint>(); private set
+        var isRecording by mutableStateOf(false); private set
+        var captureFilters by mutableStateOf(CaptureFilters())
+        var lastCapturedCallCount by mutableStateOf(0); private set
+        
+        private val events = mutableListOf<Event>()
+        private val calls = mutableListOf<HttpCall>()
+        private val engine = AutoMappingEngine()
+        
+        fun createChain(name: String) {
+            currentChain = RecordChain(newId("chain"), name)
+            chainPoints.clear()
+            mapGraph = MapGraph()
+        }
+        
+        fun startSession() {
+            currentSession = RecordingSession(newId("session"), currentChain?.id, currentTimeMillis(), filters = captureFilters)
+            events.clear(); calls.clear(); isRecording = true; lastCapturedCallCount = 0
+        }
+        
+        fun stopSession() {
+            currentSession?.let {
+                currentSession = it.copy(endedAtEpochMs = currentTimeMillis(), events = events.toList(), calls = calls.toList())
+                isRecording = false
+                mapGraph = engine.updateGraph(mapGraph, currentSession!!)
+            }
+        }
+        
+        fun saveTargetUrl(url: String) { currentSession = currentSession?.copy(targetUrl = url) }
+        
+        fun addChainPoint(name: String, url: String, parentNodeId: NodeId? = null) {
+            val sig = Signature.computeNodeSignature(url)
+            val isHub = engine.detectHub(url, sig)
+            val point = ChainPoint(newId("node"), name, url, signature = sig, isHub = isHub)
+            chainPoints.add(point)
+            mapGraph = mapGraph.upsertNode(point)
+            currentChain = currentChain?.copy(nodeIds = currentChain!!.nodeIds + point.id)
+        }
+        
+        fun addEvent(event: Event) {
+            if (!isRecording) return
+            events.add(event)
+            if (event is Event.NetworkRequestEvent) {
+                calls.add(HttpCall(event.id, currentSession?.id, event.url, event.method, event.headers, event.body))
+                lastCapturedCallCount = calls.size
+            }
+            if (event is Event.NetworkResponseEvent) {
+                calls.indexOfFirst { it.id == event.requestId }.takeIf { it >= 0 }?.let { i ->
+                    calls[i] = calls[i].copy(status = event.status, responseHeaders = event.headers, responseBody = event.body, contentType = event.contentType, completedAt = currentTimeMillis())
+                }
+            }
+        }
+        
+        fun export(): ExportBundle.BundleOutput {
+            val chains = listOfNotNull(currentChain)
+            val sessions = listOfNotNull(currentSession)
+            return ExportBundle.writeBundle(mapGraph, chains, sessions, captureFilters.redact)
+        }
+    }
+
+- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/SessionStore.kt
+  content: |
+    package de.kolping.cockpit.mapping.android
+    
+    import android.content.Context
+    import de.kolping.cockpit.mapping.core.currentTimeMillis
+    import java.io.File
+    
+    class SessionStore(private val context: Context) {
+        private val baseDir get() = File(context.filesDir, "mapping_exports").apply { mkdirs() }
+        
+        fun writeExport(output: de.kolping.cockpit.mapping.core.ExportBundle.BundleOutput): File {
+            val dir = File(baseDir, currentTimeMillis().toString()).apply { mkdirs() }
+            File(dir, "map.json").writeText(output.mapJson)
+            output.chains.forEach { (p, c) -> File(dir, p).apply { parentFile?.mkdirs() }.writeText(c) }
+            output.sessions.forEach { (p, c) -> File(dir, p).apply { parentFile?.mkdirs() }.writeText(c) }
+            output.schemas.forEach { (p, c) -> File(dir, p).apply { parentFile?.mkdirs() }.writeText(c) }
+            return dir
+        }
+        
+        fun listExports(): List<File> = baseDir.listFiles()?.filter { it.isDirectory }?.sortedByDescending { it.name } ?: emptyList()
+        fun getExportsPath(): String = baseDir.absolutePath
+    }
+
+- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/RecorderWebView.kt
+  content: |
+    package de.kolping.cockpit.mapping.android
+    
+    import android.annotation.SuppressLint
+    import android.content.Context
+    import android.webkit.*
+    import de.kolping.cockpit.mapping.core.*
+    
+    @SuppressLint("SetJavaScriptEnabled")
+    class RecorderWebView(context: Context, private val controller: RecorderController) : WebView(context) {
+        var onUrlChanged: (String) -> Unit = {}
+        
+        init {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            addJavascriptInterface(JsBridge(controller, this), JsBridge.BRIDGE_NAME)
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?) =
+                    request?.url?.toString()?.also { onUrlChanged(it) }?.let { false } ?: false
+                
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    super.onPageStarted(view, url, favicon)
+                    url?.let {
+                        onUrlChanged(it)
+                        if (controller.isRecording) controller.addEvent(Event.NavigationEvent(currentTimeMillis(), it, Event.Phase.START))
+                    }
+                }
+                
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    url?.let {
+                        onUrlChanged(it)
+                        if (controller.isRecording) {
+                            controller.addEvent(Event.NavigationEvent(currentTimeMillis(), it, Event.Phase.FINISH))
+                            view?.evaluateJavascript(InjectionScripts.CAPTURE_ALL, null)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 - path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/ui/RecorderScreen.kt
-  content: "package de.kolping.cockpit.mapping.android.ui\n\nimport android.annotation.SuppressLint\n\
-    import android.webkit.WebView\nimport androidx.compose.foundation.layout.*\nimport\
-    \ androidx.compose.material3.*\nimport androidx.compose.runtime.*\nimport androidx.compose.ui.Modifier\n\
-    import androidx.compose.ui.viewinterop.AndroidView\nimport de.kolping.cockpit.mapping.android.web.RecorderWebViewClient\n\
-    \n@SuppressLint(\"SetJavaScriptEnabled\")\n@Composable\nfun RecorderScreen(\n\
-    \    onBack: () -> Unit,\n    modifier: Modifier = Modifier,\n) {\n    var isRecording\
-    \ by remember { mutableStateOf(false) }\n    var currentUrl by remember { mutableStateOf(\"\
-    \") }\n\n    Scaffold(\n        topBar = {\n            TopAppBar(\n         \
-    \       title = { Text(\"Recorder\") },\n                navigationIcon = { TextButton(onClick\
-    \ = onBack) { Text(\"Back\") } },\n                actions = {\n             \
-    \       TextButton(onClick = { isRecording = !isRecording }) {\n             \
-    \           Text(if (isRecording) \"Stop\" else \"Record\")\n                \
-    \    }\n                }\n            )\n        }\n    ) { padding ->\n    \
-    \    Column(modifier = modifier.fillMaxSize().padding(padding)) {\n          \
-    \  if (currentUrl.isNotBlank()) {\n                Text(currentUrl, style = MaterialTheme.typography.bodySmall)\n\
-    \            }\n            AndroidView(\n                factory = { ctx ->\n\
-    \                    WebView(ctx).apply {\n                        settings.javaScriptEnabled\
-    \ = true\n                        settings.domStorageEnabled = true\n        \
-    \                webViewClient = RecorderWebViewClient(\n                    \
-    \        isRecordingProvider = { isRecording },\n                            onUrlChanged\
-    \ = { currentUrl = it }\n                        )\n                        loadUrl(\"\
-    https://portal.kolping-hochschule.de/my/\")\n                    }\n         \
-    \       },\n                modifier = Modifier.fillMaxSize()\n            )\n\
-    \        }\n    }\n}\n"
-- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/web/RecorderWebViewClient.kt
-  content: "package de.kolping.cockpit.mapping.android.web\n\nimport android.webkit.WebResourceRequest\n\
-    import android.webkit.WebView\nimport android.webkit.WebViewClient\nimport de.kolping.cockpit.mapping.android.web.js.InjectionScripts\n\
-    \nclass RecorderWebViewClient(\n    private val isRecordingProvider: () -> Boolean,\n\
-    \    private val onUrlChanged: (String) -> Unit,\n) : WebViewClient() {\n\n  \
-    \  override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?):\
-    \ Boolean {\n        val url = request?.url?.toString() ?: return false\n    \
-    \    onUrlChanged(url)\n        return false\n    }\n\n    override fun onPageFinished(view:\
-    \ WebView?, url: String?) {\n        super.onPageFinished(view, url)\n       \
-    \ val u = url ?: return\n        onUrlChanged(u)\n\n        if (!isRecordingProvider())\
-    \ return\n\n        // MVP: inject JS to capture fetch/xhr (in-memory only for\
-    \ now)\n        view?.evaluateJavascript(InjectionScripts.CAPTURE_NETWORK, null)\n\
-    \    }\n}\n"
-- path: kmp/mapping/android/src/main/java/de/kolping/cockpit/mapping/android/web/js/InjectionScripts.kt
-  content: "package de.kolping.cockpit.mapping.android.web.js\n\nobject InjectionScripts\
-    \ {\n    // MVP: wrap fetch & XHR and emit console logs.\n    // Next iteration:\
-    \ send events to Android via addJavascriptInterface bridge.\n    const val CAPTURE_NETWORK\
-    \ = \"\"\"\n(function(){\n  if(window.__kolpingRecorderInstalled) return;\n  window.__kolpingRecorderInstalled\
-    \ = true;\n\n  const origFetch = window.fetch;\n  window.fetch = async function(){\n\
-    \    const url = arguments[0];\n    try { console.debug('[RECORDER][fetch]', url);\
-    \ } catch(e) {}\n    return await origFetch.apply(this, arguments);\n  };\n\n\
-    \  const XHR = XMLHttpRequest.prototype;\n  const origOpen = XHR.open;\n  XHR.open\
-    \ = function(method, url){\n    this.__rec_method = method;\n    this.__rec_url\
-    \ = url;\n    return origOpen.apply(this, arguments);\n  };\n  const origSend\
-    \ = XHR.send;\n  XHR.send = function(body){\n    try { console.debug('[RECORDER][xhr]',\
-    \ this.__rec_method, this.__rec_url); } catch(e) {}\n    return origSend.apply(this,\
-    \ arguments);\n  };\n})();\n\"\"\"\n}\n"
+  content: |
+    package de.kolping.cockpit.mapping.android.ui
+    
+    import android.annotation.SuppressLint
+    import androidx.compose.foundation.layout.*
+    import androidx.compose.material3.*
+    import androidx.compose.runtime.*
+    import androidx.compose.ui.Modifier
+    import androidx.compose.ui.platform.LocalContext
+    import androidx.compose.ui.unit.dp
+    import androidx.compose.ui.viewinterop.AndroidView
+    import de.kolping.cockpit.mapping.android.*
+    
+    @OptIn(ExperimentalMaterial3Api::class)
+    @SuppressLint("SetJavaScriptEnabled")
+    @Composable
+    fun RecorderScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
+        val ctx = LocalContext.current
+        val controller = remember { RecorderController() }
+        val store = remember { SessionStore(ctx) }
+        var chainName by remember { mutableStateOf("") }
+        var currentUrl by remember { mutableStateOf("") }
+        var showExport by remember { mutableStateOf(false) }
+        var exportPath by remember { mutableStateOf("") }
+        var redact by remember { mutableStateOf(true) }
+        var captureJson by remember { mutableStateOf(true) }
+        var parentDropdownExpanded by remember { mutableStateOf(false) }
+        var selectedParent by remember { mutableStateOf<String?>(null) }
+        
+        LaunchedEffect(redact, captureJson) {
+            controller.captureFilters = controller.captureFilters.copy(redact = redact, captureJsonBodies = captureJson)
+        }
+        
+        Scaffold(topBar = { TopAppBar(title = { Text("Recorder / Mapping") }, navigationIcon = { TextButton(onClick = onBack) { Text("Back") } }) }) { pad ->
+            Column(modifier.fillMaxSize().padding(pad).padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                OutlinedTextField(chainName, { chainName = it }, label = { Text("Chain Name") }, modifier = Modifier.fillMaxWidth(), enabled = controller.currentChain == null)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Button({ if (chainName.isNotBlank()) controller.createChain(chainName) }, enabled = controller.currentChain == null && chainName.isNotBlank(), modifier = Modifier.weight(1f)) { Text("Create Chain") }
+                    Button({ controller.startSession() }, enabled = controller.currentChain != null && !controller.isRecording, modifier = Modifier.weight(1f)) { Text("Start") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Button({ controller.stopSession() }, enabled = controller.isRecording, modifier = Modifier.weight(1f)) { Text("Stop") }
+                    Button({ if (currentUrl.isNotBlank()) controller.saveTargetUrl(currentUrl) }, enabled = controller.currentChain != null && currentUrl.isNotBlank(), modifier = Modifier.weight(1f)) { Text("Save URL") }
+                }
+                Button({ val o = controller.export(); exportPath = store.writeExport(o).absolutePath; showExport = true }, enabled = controller.currentChain != null, modifier = Modifier.fillMaxWidth()) { Text("Export Bundle") }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row { Text("Redact:"); Switch(redact, { redact = it }) }
+                    Row { Text("JSON:"); Switch(captureJson, { captureJson = it }) }
+                }
+                if (controller.chainPoints.isNotEmpty()) {
+                    Box {
+                        OutlinedButton({ parentDropdownExpanded = true }) { Text(selectedParent ?: "Select Parent") }
+                        DropdownMenu(parentDropdownExpanded, { parentDropdownExpanded = false }) {
+                            controller.chainPoints.forEach { p -> DropdownMenuItem({ Text(p.name) }, { selectedParent = p.id; parentDropdownExpanded = false }) }
+                        }
+                    }
+                }
+                Text(if (controller.isRecording) "⏺ Recording... (${controller.lastCapturedCallCount} calls)" else "Stopped", style = MaterialTheme.typography.bodySmall)
+                controller.currentChain?.let { Text("Chain: ${it.name}", style = MaterialTheme.typography.bodySmall) }
+                Text(currentUrl.take(60), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                AndroidView({ RecorderWebView(it, controller).apply { onUrlChanged = { u -> currentUrl = u }; loadUrl("https://portal.kolping-hochschule.de/my/") } }, Modifier.fillMaxSize())
+            }
+        }
+        if (showExport) AlertDialog({ showExport = false }, { TextButton({ showExport = false }) { Text("OK") } }, title = { Text("Exported") }, text = { Text(exportPath) })
+    }
+
 - path: kmp/recorder/app/build.gradle.kts
-  content: "plugins {\n    id(\"com.android.application\")\n    kotlin(\"android\"\
-    )\n}\n\nandroid {\n    namespace = \"de.kolping.cockpit.recorderapp\"\n    compileSdk\
-    \ = 35\n\n    defaultConfig {\n        applicationId = \"de.kolping.cockpit.recorderapp\"\
-    \n        minSdk = 26\n        targetSdk = 35\n        versionCode = 1\n     \
-    \   versionName = \"0.1.0\"\n    }\n}\n\ndependencies {\n    implementation(project(\"\
-    :mapping:android\"))\n    implementation(\"androidx.activity:activity-compose:1.9.3\"\
-    )\n    implementation(\"androidx.compose.ui:ui:1.7.6\")\n    implementation(\"\
-    androidx.compose.material3:material3:1.3.1\")\n}\n"
+  content: |
+    plugins {
+        id("com.android.application")
+        kotlin("android")
+    }
+    
+    android {
+        namespace = "de.kolping.cockpit.recorderapp"
+        compileSdk = 34
+        
+        defaultConfig {
+            applicationId = "de.kolping.cockpit.recorderapp"
+            minSdk = 26
+            targetSdk = 34
+            versionCode = 1
+            versionName = "0.1.0"
+        }
+        
+        buildFeatures {
+            compose = true
+        }
+        
+        composeOptions {
+            kotlinCompilerExtensionVersion = "1.5.8"
+        }
+        
+        compileOptions {
+            sourceCompatibility = JavaVersion.VERSION_1_8
+            targetCompatibility = JavaVersion.VERSION_1_8
+        }
+        
+        kotlinOptions {
+            jvmTarget = "1.8"
+        }
+    }
+    
+    dependencies {
+        implementation(project(":mapping:android"))
+        implementation("androidx.activity:activity-compose:1.8.2")
+        implementation("androidx.compose.ui:ui:1.6.0")
+        implementation("androidx.compose.material3:material3:1.2.0")
+    }
+
 - path: kmp/recorder/app/src/main/AndroidManifest.xml
-  content: "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\"\
-    >\n  <application android:label=\"RecorderApp\">\n    <activity android:name=\"\
-    .RecorderAppActivity\" android:exported=\"true\">\n      <intent-filter>\n   \
-    \     <action android:name=\"android.intent.action.MAIN\" />\n        <category\
-    \ android:name=\"android.intent.category.LAUNCHER\" />\n      </intent-filter>\n\
-    \    </activity>\n  </application>\n</manifest>\n"
+  content: |
+    <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+      <uses-permission android:name="android.permission.INTERNET" />
+      <application android:name=".RecorderApp" android:label="RecorderApp">
+        <activity android:name=".RecorderAppActivity" android:exported="true">
+          <intent-filter>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+          </intent-filter>
+        </activity>
+      </application>
+    </manifest>
+
+- path: kmp/recorder/app/src/main/java/de/kolping/cockpit/recorderapp/RecorderApp.kt
+  content: |
+    package de.kolping.cockpit.recorderapp
+    
+    import android.app.Application
+    
+    class RecorderApp : Application()
+
 - path: kmp/recorder/app/src/main/java/de/kolping/cockpit/recorderapp/RecorderAppActivity.kt
-  content: "package de.kolping.cockpit.recorderapp\n\nimport android.os.Bundle\nimport\
-    \ androidx.activity.ComponentActivity\nimport androidx.activity.compose.setContent\n\
-    import de.kolping.cockpit.mapping.android.ui.RecorderScreen\n\nclass RecorderAppActivity\
-    \ : ComponentActivity() {\n    override fun onCreate(savedInstanceState: Bundle?)\
-    \ {\n        super.onCreate(savedInstanceState)\n        setContent {\n      \
-    \      RecorderScreen(onBack = { /* no-op */ })\n        }\n    }\n}\n"
+  content: |
+    package de.kolping.cockpit.recorderapp
+    
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+    import de.kolping.cockpit.mapping.android.ui.RecorderScreen
+    
+    class RecorderAppActivity : ComponentActivity() {
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContent { RecorderScreen(onBack = { finish() }) }
+        }
+    }
+
 patches:
 - id: settings_includes
-  diff: "--- a/kmp/settings.gradle.kts\n+++ b/kmp/settings.gradle.kts\n@@ -20,3 +20,6\
-    \ @@\n \n include(\":shared\")\n include(\":androidApp\")\n+include(\":mapping:core\"\
-    )\n+include(\":mapping:android\")\n+include(\":recorder:app\")\n"
+  diff: |
+    --- a/kmp/settings.gradle.kts
+    +++ b/kmp/settings.gradle.kts
+    @@ -19,3 +19,6 @@ dependencyResolutionManagement {
+     
+     include(":shared")
+     include(":androidApp")
+    +include(":mapping:core")
+    +include(":mapping:android")
+    +include(":recorder:app")
 - id: androidApp_deps
-  diff: "--- a/kmp/androidApp/build.gradle.kts\n+++ b/kmp/androidApp/build.gradle.kts\n\
-    @@ -57,6 +57,8 @@\n \n dependencies {\n     implementation(project(\":shared\"\
-    ))\n+    implementation(project(\":mapping:core\"))\n+    implementation(project(\"\
-    :mapping:android\"))\n     \n     // Kotlin\n     implementation(libs.kotlin.stdlib)\n"
+  diff: |
+    --- a/kmp/androidApp/build.gradle.kts
+    +++ b/kmp/androidApp/build.gradle.kts
+    @@ -56,6 +56,8 @@ android {
+     
+     dependencies {
+         implementation(project(":shared"))
+    +    implementation(project(":mapping:core"))
+    +    implementation(project(":mapping:android"))
+         
+         // Kotlin
+         implementation(libs.kotlin.stdlib)
+- id: mainactivity_recorder_import
+  diff: |
+    --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    @@ -12,6 +12,7 @@ import de.kolping.cockpit.android.auth.TokenManager
+     import de.kolping.cockpit.android.ui.screens.*
+     import de.kolping.cockpit.android.ui.theme.KolpingCockpitTheme
+     import org.koin.android.ext.android.inject
+    +import de.kolping.cockpit.mapping.android.ui.RecorderScreen
+     
+     class MainActivity : ComponentActivity() {
 - id: mainactivity_recorder_screen
-  diff: "--- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt\n\
-    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt\n\
-    @@ -13,6 +13,7 @@\n import de.kolping.cockpit.android.ui.theme.KolpingCockpitTheme\n\
-    \ import org.koin.android.ext.android.inject\n \n+import de.kolping.cockpit.mapping.android.ui.RecorderScreen\n\
-    \ class MainActivity : ComponentActivity() {\n     \n     private val tokenManager:\
-    \ TokenManager by inject()\n@@ -65,6 +66,7 @@\n         \n         Screen.Home\
-    \ -> {\n             HomeScreen(\n+                onNavigateToRecorder = { currentScreen\
-    \ = Screen.Recorder },\n                 onNavigateToModuleDetail = { moduleId\
-    \ ->\n                     selectedModuleId = moduleId\n                     previousScreen\
-    \ = Screen.Home\n@@ -142,6 +144,10 @@\n             )\n         }\n         \n\
-    +        Screen.Recorder -> {\n+            RecorderScreen(onBack = { currentScreen\
-    \ = Screen.Home })\n+        }\n+\n         Screen.PdfViewer -> {\n          \
-    \   selectedFilePath?.let { filePath ->\n                 PdfViewerScreen(\n@@\
-    \ -186,4 +192,5 @@\n     object ModuleDetail : Screen()\n     object OfflineLibrary\
-    \ : Screen()\n     object PdfViewer : Screen()\n+    object Recorder : Screen()\n\
-    \ }\n"
-- id: homescreen_recorder_entry
-  diff: "--- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt\n\
-    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt\n\
-    @@ -23,6 +23,7 @@\n @OptIn(ExperimentalMaterial3Api::class)\n @Composable\n fun\
-    \ HomeScreen(\n+    onNavigateToRecorder: () -> Unit = {},\n     onNavigateToModuleDetail:\
-    \ (String) -> Unit = {},\n     onNavigateToCalendar: () -> Unit = {},\n     onNavigateToOfflineLibrary:\
-    \ () -> Unit = {},\n"
+  diff: |
+    --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    @@ -63,6 +63,10 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
+     
+             Screen.Home -> {
+                 HomeScreen(
+    +                onNavigateToRecorder = {
+    +                    previousScreen = Screen.Home
+    +                    currentScreen = Screen.Recorder
+    +                },
+                     onNavigateToModuleDetail = { moduleId ->
+                         selectedModuleId = moduleId
+                         previousScreen = Screen.Home
+- id: mainactivity_recorder_case
+  diff: |
+    --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    @@ -172,6 +172,10 @@ fun KolpingCockpitApp(tokenManager: TokenManager) {
+                 )
+             }
+         }
+    +    
+    +    Screen.Recorder -> {
+    +        RecorderScreen(onBack = { currentScreen = Screen.Home })
+    +    }
+     }
+     
+     sealed class Screen {
+- id: mainactivity_screen_sealed
+  diff: |
+    --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/MainActivity.kt
+    @@ -185,4 +185,5 @@ sealed class Screen {
+         object ModuleDetail : Screen()
+         object OfflineLibrary : Screen()
+         object PdfViewer : Screen()
+    +    object Recorder : Screen()
+     }
+- id: homescreen_recorder_param
+  diff: |
+    --- a/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
+    +++ b/kmp/androidApp/src/main/java/de/kolping/cockpit/android/ui/screens/HomeScreen.kt
+    @@ -25,6 +25,7 @@ sealed class Screen {
+     @Composable
+     fun HomeScreen(
+    +    onNavigateToRecorder: () -> Unit = {},
+         onNavigateToModuleDetail: (String) -> Unit = {},
+         onNavigateToCalendar: () -> Unit = {},
+         onNavigateToOfflineLibrary: () -> Unit = {},
