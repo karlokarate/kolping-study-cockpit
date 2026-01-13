@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import de.kolping.cockpit.android.database.entities.FileEntity
 import de.kolping.cockpit.android.repository.OfflineRepository
 import de.kolping.cockpit.android.storage.FileStorageManager
+import de.kolping.cockpit.android.util.FileUtils
 import kotlinx.coroutines.flow.*
 
 /**
@@ -137,45 +138,22 @@ class OfflineLibraryViewModel(
     }
     
     /**
-     * Format file size in human-readable format
+     * Format file size in human-readable format.
+     * Review Finding Fix: Delegates to shared FileUtils to avoid code duplication.
      */
-    fun formatFileSize(sizeBytes: Long): String {
-        val kb = 1024.0
-        val mb = kb * 1024
-        val gb = mb * 1024
-        
-        return when {
-            sizeBytes >= gb -> String.format("%.2f GB", sizeBytes / gb)
-            sizeBytes >= mb -> String.format("%.2f MB", sizeBytes / mb)
-            sizeBytes >= kb -> String.format("%.2f KB", sizeBytes / kb)
-            else -> "$sizeBytes B"
-        }
-    }
+    fun formatFileSize(sizeBytes: Long): String = FileUtils.formatFileSize(sizeBytes)
     
     /**
-     * Format download date in human-readable format
+     * Format download date in human-readable format.
+     * Review Finding Fix: Delegates to shared FileUtils with thread-safe DateFormat.
      */
-    fun formatDownloadDate(timestamp: Long): String {
-        val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.GERMAN)
-        return sdf.format(java.util.Date(timestamp))
-    }
+    fun formatDownloadDate(timestamp: Long): String = FileUtils.formatDownloadDate(timestamp)
     
     /**
-     * Get file type category based on file extension
+     * Get file type category based on file extension.
+     * Review Finding Fix: Delegates to shared FileUtils instead of cross-referencing ModuleDetailViewModel.
      */
-    fun getFileTypeCategory(fileType: String): ModuleDetailViewModel.FileTypeCategory {
-        return when (fileType.lowercase()) {
-            "pdf" -> ModuleDetailViewModel.FileTypeCategory.PDF
-            "doc", "docx", "odt", "txt", "rtf" -> ModuleDetailViewModel.FileTypeCategory.DOCUMENT
-            "xls", "xlsx", "ods", "csv" -> ModuleDetailViewModel.FileTypeCategory.SPREADSHEET
-            "ppt", "pptx", "odp" -> ModuleDetailViewModel.FileTypeCategory.PRESENTATION
-            "jpg", "jpeg", "png", "gif", "bmp", "svg", "webp" -> ModuleDetailViewModel.FileTypeCategory.IMAGE
-            "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm" -> ModuleDetailViewModel.FileTypeCategory.VIDEO
-            "mp3", "wav", "ogg", "m4a", "flac", "aac" -> ModuleDetailViewModel.FileTypeCategory.AUDIO
-            "zip", "rar", "7z", "tar", "gz", "bz2" -> ModuleDetailViewModel.FileTypeCategory.ARCHIVE
-            else -> ModuleDetailViewModel.FileTypeCategory.OTHER
-        }
-    }
+    fun getFileTypeCategory(fileType: String): FileUtils.FileTypeCategory = FileUtils.getFileTypeCategory(fileType)
     
     /**
      * UI State for OfflineLibraryScreen
