@@ -679,9 +679,11 @@ new_files:
                   for (call in session.calls) {
                       call.responseBody?.let { body ->
                           if (call.contentType?.contains("json") == true) {
-                              val schema = SchemaDeriver.deriveSchema(body)
-                              if (schema.isNotEmpty()) {
-                                  schemasJson[call.callId] = json.encodeToString(schema)
+                              val schemaResult = SchemaDeriver.deriveSchema(body)
+                              schemaResult.getOrNull()?.let { schema ->
+                                  if (schema.isNotEmpty()) {
+                                      schemasJson[call.callId] = json.encodeToString(schema)
+                                  }
                               }
                           }
                       }
