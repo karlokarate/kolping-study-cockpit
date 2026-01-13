@@ -1,0 +1,54 @@
+name: Scaffold Website Mapping MVP
+
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_path:
+        description: "Path to scaffold bundle YAML"
+        required: true
+        default: "scaffold/scaffold_bundle.yml"
+
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Apply scaffold bundle
+        run: |
+          python scripts/apply_bundle.py "${{ inputs.bundle_path }}"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Smoke build (Android debug)
+        run: |
+          cd kmp
+          ./gradlew --no-daemon :androidApp:assembleDebug
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "Scaffold website mapping MVP"
+          title: "Scaffold website mapping MVP (mapping-core + mapping-android + optional recorder-app)"
+          body: |
+            This PR scaffolds the website mapping MVP:
+            - Adds new modules: mapping:core, mapping:android, recorder:app
+            - Adds minimal Recorder screen entry in androidApp
+            - Generates initial skeleton files + minimal integration
+          branch: "scaffold/website-mapping-mvp"
