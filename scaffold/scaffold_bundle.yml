@@ -1121,10 +1121,6 @@ new_files:
                           Checkbox(checked = redactEnabled, onCheckedChange = { redactEnabled = it })
                           Text("Redact")
                       }
-                      Row(verticalAlignment = Alignment.CenterVertically) {
-                          Checkbox(checked = captureJson, onCheckedChange = { captureJson = it })
-                          Text("Capture JSON")
-                      }
                   }
 
                   Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
