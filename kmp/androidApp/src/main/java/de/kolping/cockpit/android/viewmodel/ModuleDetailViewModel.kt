@@ -10,6 +10,12 @@ import de.kolping.cockpit.android.util.FileUtils
 import kotlinx.coroutines.flow.*
 
 /**
+ * Type alias for FileTypeCategory from FileUtils.
+ * Review Finding Fix: Moved enum to shared utility to avoid cross-ViewModel dependencies.
+ */
+typealias FileTypeCategory = FileUtils.FileTypeCategory
+
+/**
  * ViewModel for ModuleDetailScreen
  * Manages display of individual module with all associated files
  * Based on Issue #6 PR 5 requirements
@@ -22,12 +28,6 @@ class ModuleDetailViewModel(
     companion object {
         private const val TAG = "ModuleDetailViewModel"
     }
-    
-    /**
-     * Type alias for FileTypeCategory from FileUtils.
-     * Review Finding Fix: Moved enum to shared utility to avoid cross-ViewModel dependencies.
-     */
-    typealias FileTypeCategory = FileUtils.FileTypeCategory
     
     /**
      * UI state that combines module and files data with proper lifecycle management
