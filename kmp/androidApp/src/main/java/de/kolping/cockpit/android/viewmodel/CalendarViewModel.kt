@@ -197,6 +197,15 @@ class CalendarViewModel(
     }
     
     /**
+     * Refresh calendar data
+     */
+    fun refresh() {
+        // Trigger a refresh by re-collecting the flow
+        // The flow will automatically re-emit when the database changes
+        // This is a no-op since we're using reactive flows
+    }
+    
+    /**
      * UI State for CalendarScreen
      */
     sealed class CalendarUiState {

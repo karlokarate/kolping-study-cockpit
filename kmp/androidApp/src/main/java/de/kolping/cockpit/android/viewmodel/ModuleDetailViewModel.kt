@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import de.kolping.cockpit.android.database.entities.FileEntity
 import de.kolping.cockpit.android.database.entities.ModuleEntity
 import de.kolping.cockpit.android.repository.OfflineRepository
+import de.kolping.cockpit.android.util.FileUtils
 import kotlinx.coroutines.flow.*
 
 /**
@@ -21,6 +22,12 @@ class ModuleDetailViewModel(
     companion object {
         private const val TAG = "ModuleDetailViewModel"
     }
+    
+    /**
+     * Type alias for FileTypeCategory from FileUtils.
+     * Review Finding Fix: Moved enum to shared utility to avoid cross-ViewModel dependencies.
+     */
+    typealias FileTypeCategory = FileUtils.FileTypeCategory
     
     /**
      * UI state that combines module and files data with proper lifecycle management
@@ -56,6 +63,27 @@ class ModuleDetailViewModel(
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = ModuleDetailUiState.Loading
     )
+    
+    /**
+     * Refresh module details
+     */
+    fun refresh() {
+        // Trigger a refresh by re-collecting the flow
+        // The flow will automatically re-emit when the database changes
+        // This is a no-op since we're using reactive flows
+    }
+    
+    /**
+     * Format file size in human-readable format.
+     * Review Finding Fix: Delegates to shared FileUtils to avoid code duplication.
+     */
+    fun formatFileSize(sizeBytes: Long): String = FileUtils.formatFileSize(sizeBytes)
+    
+    /**
+     * Get file type category based on file extension.
+     * Review Finding Fix: Delegates to shared FileUtils to avoid code duplication.
+     */
+    fun getFileTypeCategory(fileType: String): FileTypeCategory = FileUtils.getFileTypeCategory(fileType)
     
     /**
      * UI State for ModuleDetailScreen

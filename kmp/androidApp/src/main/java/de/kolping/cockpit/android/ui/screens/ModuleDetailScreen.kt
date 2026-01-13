@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import de.kolping.cockpit.android.database.entities.FileEntity
 import de.kolping.cockpit.android.database.entities.ModuleEntity
+import de.kolping.cockpit.android.util.FileUtils
 import de.kolping.cockpit.android.viewmodel.ModuleDetailViewModel
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
@@ -94,7 +95,7 @@ private fun ModuleDetailContent(
     files: List<FileEntity>,
     onOpenFile: (FileEntity) -> Unit,
     formatFileSize: (Long) -> String,
-    getFileTypeCategory: (String) -> ModuleDetailViewModel.FileTypeCategory
+    getFileTypeCategory: (String) -> FileUtils.FileTypeCategory
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -350,18 +351,17 @@ private fun FileCard(
     }
 }
 
-@Composable
-private fun getFileTypeIcon(category: ModuleDetailViewModel.FileTypeCategory): ImageVector {
+private fun getFileTypeIcon(category: FileUtils.FileTypeCategory): ImageVector {
     return when (category) {
-        ModuleDetailViewModel.FileTypeCategory.PDF -> Icons.Default.PictureAsPdf
-        ModuleDetailViewModel.FileTypeCategory.DOCUMENT -> Icons.Default.Description
-        ModuleDetailViewModel.FileTypeCategory.SPREADSHEET -> Icons.Default.TableChart
-        ModuleDetailViewModel.FileTypeCategory.PRESENTATION -> Icons.Default.Slideshow
-        ModuleDetailViewModel.FileTypeCategory.IMAGE -> Icons.Default.Image
-        ModuleDetailViewModel.FileTypeCategory.VIDEO -> Icons.Default.VideoFile
-        ModuleDetailViewModel.FileTypeCategory.AUDIO -> Icons.Default.AudioFile
-        ModuleDetailViewModel.FileTypeCategory.ARCHIVE -> Icons.Default.FolderZip
-        ModuleDetailViewModel.FileTypeCategory.OTHER -> Icons.Default.InsertDriveFile
+        FileUtils.FileTypeCategory.PDF -> Icons.Default.PictureAsPdf
+        FileUtils.FileTypeCategory.DOCUMENT -> Icons.Default.Description
+        FileUtils.FileTypeCategory.SPREADSHEET -> Icons.Default.TableChart
+        FileUtils.FileTypeCategory.PRESENTATION -> Icons.Default.Slideshow
+        FileUtils.FileTypeCategory.IMAGE -> Icons.Default.Image
+        FileUtils.FileTypeCategory.VIDEO -> Icons.Default.VideoFile
+        FileUtils.FileTypeCategory.AUDIO -> Icons.Default.AudioFile
+        FileUtils.FileTypeCategory.ARCHIVE -> Icons.Default.FolderZip
+        FileUtils.FileTypeCategory.OTHER -> Icons.Default.InsertDriveFile
     }
 }
 

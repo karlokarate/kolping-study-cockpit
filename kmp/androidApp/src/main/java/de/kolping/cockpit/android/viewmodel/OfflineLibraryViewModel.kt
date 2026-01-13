@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import de.kolping.cockpit.android.database.entities.FileEntity
 import de.kolping.cockpit.android.repository.OfflineRepository
 import de.kolping.cockpit.android.storage.FileStorageManager
+import de.kolping.cockpit.android.util.FileUtils
 import kotlinx.coroutines.flow.*
 
 /**
@@ -126,6 +127,33 @@ class OfflineLibraryViewModel(
             fileTypeBreakdown = fileTypeBreakdown
         )
     }
+    
+    /**
+     * Refresh offline library
+     */
+    fun refresh() {
+        // Trigger a refresh by re-collecting the flow
+        // The flow will automatically re-emit when the database changes
+        // This is a no-op since we're using reactive flows
+    }
+    
+    /**
+     * Format file size in human-readable format.
+     * Review Finding Fix: Delegates to shared FileUtils to avoid code duplication.
+     */
+    fun formatFileSize(sizeBytes: Long): String = FileUtils.formatFileSize(sizeBytes)
+    
+    /**
+     * Format download date in human-readable format.
+     * Review Finding Fix: Delegates to shared FileUtils with thread-safe DateFormat.
+     */
+    fun formatDownloadDate(timestamp: Long): String = FileUtils.formatDownloadDate(timestamp)
+    
+    /**
+     * Get file type category based on file extension.
+     * Review Finding Fix: Delegates to shared FileUtils instead of cross-referencing ModuleDetailViewModel.
+     */
+    fun getFileTypeCategory(fileType: String): FileUtils.FileTypeCategory = FileUtils.getFileTypeCategory(fileType)
     
     /**
      * UI State for OfflineLibraryScreen
