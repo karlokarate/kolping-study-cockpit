@@ -608,6 +608,7 @@ new_files:
       plugins {
           id("com.android.library")
           kotlin("android")
+          kotlin("plugin.serialization")
       }
 
       android {
@@ -638,6 +639,7 @@ new_files:
 
       dependencies {
           implementation(project(":mapping:core"))
+          implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
           implementation("androidx.compose.material3:material3:1.2.0")
           implementation("androidx.compose.ui:ui:1.6.0")
           implementation("androidx.compose.foundation:foundation:1.6.0")
